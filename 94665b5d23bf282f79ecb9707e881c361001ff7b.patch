@@ -1,0 +1,585 @@
+From 94665b5d23bf282f79ecb9707e881c361001ff7b Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Miguel=20=C3=81ngel=20Navas?= <manavas@gmail.com>
+Date: Tue, 23 Feb 2021 10:43:17 +0100
+Subject: [PATCH] =?UTF-8?q?#705=20Afegida=20informaci=C3=B3:=20Incluir=20u?=
+ =?UTF-8?q?na=20columna=20con=20la=20jornada=20del=20profesor:=20Completa?=
+ =?UTF-8?q?=20o=20media.=20Incluir=20una=20columna=20con=20los=20cargos=20?=
+ =?UTF-8?q?que=20pueda=20tener=20el=20profesor,=20en=20la=20celda=20poner?=
+ =?UTF-8?q?=20los=20cargos=20separados=20por=20comas.=20Incluir=20una=20co?=
+ =?UTF-8?q?lumna=20que=20indique=20si=20forma=20parte=20del=20equipo=20dir?=
+ =?UTF-8?q?ectivo=20(S/N).=20(S=C3=B3lo=20excel)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ .../impl/DocumentHorariServiceImpl.java       |   1 +
+ .../logica/dao/DestinacioProfessorDao.java    |   2 +
+ .../caib/xibper/logica/dao/ProfessorDao.java  |   2 +
+ .../hibernate/DestinacioProfessorDaoImpl.java |   9 +
+ .../dao/hibernate/ProfessorDaoImpl.java       |  10 +
+ .../ejb/DestinacioProfessorServiceEJB.java    |   5 +
+ .../logica/ejb/ProfessorServiceEJB.java       |   5 +
+ .../servei/DestinacioProfessorService.java    |  14 +-
+ .../logica/servei/ProfessorService.java       |   2 +
+ .../impl/DestinacioProfessorServiceImpl.java  |   7 +-
+ .../servei/impl/ProfessorServiceImpl.java     |   5 +
+ .../consultes/consultesProfessor.hbm.xml      |  20 +-
+ .../ControladorReportsProfessorat.java        | 182 ++++++++++++++----
+ .../informeProfessoratDetallat.jsp            |   8 +-
+ .../llistes/llistaHorariProfessoratDetall.js  |   4 +-
+ 15 files changed, 225 insertions(+), 51 deletions(-)
+
+diff --git a/modules/logica/src/es/caib/xibimp/logica/servei/impl/DocumentHorariServiceImpl.java b/modules/logica/src/es/caib/xibimp/logica/servei/impl/DocumentHorariServiceImpl.java
+index 1bdf228c53..7514f97652 100644
+--- a/modules/logica/src/es/caib/xibimp/logica/servei/impl/DocumentHorariServiceImpl.java
++++ b/modules/logica/src/es/caib/xibimp/logica/servei/impl/DocumentHorariServiceImpl.java
+@@ -880,6 +880,7 @@ public class DocumentHorariServiceImpl implements DocumentHorariService {
+         Professor professor;
+         Map<Persona, Map<Integer, Tupla<Float, String>>> dades = new LinkedHashMap<>();
+         for (String codiProfessor: codisProfessors) {
++
+             professor = professorDaoXibper.carrega(codiProfessor);
+             Date dataHorari = obteDataHorari(codiCentre, date, cursAcademic, cursAcademicActual, codiProfessor);
+             Collection<Sessio> sessions = horariDao.llistaHorariProfessor(codiProfessor, codiCentre, cursAcademic, dataHorari);
+diff --git a/modules/logica/src/es/caib/xibper/logica/dao/DestinacioProfessorDao.java b/modules/logica/src/es/caib/xibper/logica/dao/DestinacioProfessorDao.java
+index 5614ec566b..11949a2196 100644
+--- a/modules/logica/src/es/caib/xibper/logica/dao/DestinacioProfessorDao.java
++++ b/modules/logica/src/es/caib/xibper/logica/dao/DestinacioProfessorDao.java
+@@ -152,4 +152,6 @@ public interface DestinacioProfessorDao extends GenericDao {
+     Collection<ProfessoratAssignat> llistaProfessorsDestinatsReligio(CursAcademic any);
+ 
+     List<CarrecProfessor> llistaTutoriesFCT(String codiProfessor, CursAcademic any);
++
++    Collection<DestinacioProfessor> llistaDestinacioProfessors(Collection<String> codisProfessors, String codiCentre, Date dataCerca);
+ }
+diff --git a/modules/logica/src/es/caib/xibper/logica/dao/ProfessorDao.java b/modules/logica/src/es/caib/xibper/logica/dao/ProfessorDao.java
+index e396f8212f..fef3be4808 100644
+--- a/modules/logica/src/es/caib/xibper/logica/dao/ProfessorDao.java
++++ b/modules/logica/src/es/caib/xibper/logica/dao/ProfessorDao.java
+@@ -132,4 +132,6 @@ public interface ProfessorDao extends GenericDao {
+     Collection<Professor> llistaProfessorsCos(CursAcademic any, String codiCentre, int codiCos);
+     FuncioProfessor carregaFuncioProfessorCodiSIGP(String codiFuncioSIGP);
+ 
++    Collection<CarrecProfessor> cercaCarrecsDeProfessors(String codiCentre, Collection<String> codisProfessors, Date dataCerca);
++
+ }
+diff --git a/modules/logica/src/es/caib/xibper/logica/dao/hibernate/DestinacioProfessorDaoImpl.java b/modules/logica/src/es/caib/xibper/logica/dao/hibernate/DestinacioProfessorDaoImpl.java
+index 2c299cfe86..bb6d5a80e8 100644
+--- a/modules/logica/src/es/caib/xibper/logica/dao/hibernate/DestinacioProfessorDaoImpl.java
++++ b/modules/logica/src/es/caib/xibper/logica/dao/hibernate/DestinacioProfessorDaoImpl.java
+@@ -1712,4 +1712,13 @@ public class DestinacioProfessorDaoImpl extends GenericDaoHibernate implements D
+         query.setParameter("any", any);
+         return new ArrayList<>(this.<CarrecProfessor>listUniques(query));
+     }
++
++    @Override
++    public Collection<DestinacioProfessor> llistaDestinacioProfessors(Collection<String> codisProfessors, String codiCentre, Date dataCerca) {
++        return list(getCurrentSession().getNamedQuery("xibper.getDestinacioProfessors")
++                .setParameter("codiCentre", codiCentre)
++                .setParameterList("codisProfessor", codisProfessors)
++                .setDate("dataCerca", dataCerca)
++        );
++    }
+ }
+\ No newline at end of file
+diff --git a/modules/logica/src/es/caib/xibper/logica/dao/hibernate/ProfessorDaoImpl.java b/modules/logica/src/es/caib/xibper/logica/dao/hibernate/ProfessorDaoImpl.java
+index 6e1e85857e..fc4955d9e1 100644
+--- a/modules/logica/src/es/caib/xibper/logica/dao/hibernate/ProfessorDaoImpl.java
++++ b/modules/logica/src/es/caib/xibper/logica/dao/hibernate/ProfessorDaoImpl.java
+@@ -1242,4 +1242,14 @@ public class ProfessorDaoImpl extends GenericDaoHibernate implements ProfessorDa
+         return uniqueResult(query);
+     }
+ 
++    @Override
++    public Collection<CarrecProfessor> cercaCarrecsDeProfessors(String codiCentre, Collection<String> codisProfessors, Date dataCerca) {
++        Query query = getCurrentSession().getNamedQuery("xibper.cercaCarrecsDeProfessors")
++            .setString("codiCentre", codiCentre)
++            .setParameterList("codisProfessors", codisProfessors)
++            .setDate("dataCerca", dataCerca)
++        ;
++        return listUniques(query);
++    }
++
+ }
+diff --git a/modules/logica/src/es/caib/xibper/logica/ejb/DestinacioProfessorServiceEJB.java b/modules/logica/src/es/caib/xibper/logica/ejb/DestinacioProfessorServiceEJB.java
+index eac92cb6fd..cd341c999f 100644
+--- a/modules/logica/src/es/caib/xibper/logica/ejb/DestinacioProfessorServiceEJB.java
++++ b/modules/logica/src/es/caib/xibper/logica/ejb/DestinacioProfessorServiceEJB.java
+@@ -441,6 +441,11 @@ public class DestinacioProfessorServiceEJB  implements DestinacioProfessorServic
+         return impl.llistaSubstitucioProfessor(codiCentre, data);
+     }
+ 
++    @Override
++    public Collection<DestinacioProfessor> llistaDestinacions(Collection<String> codisProfessors, String codiCentre, Date dataCerca) {
++        return impl.llistaDestinacions(codisProfessors, codiCentre, dataCerca);
++    }
++
+     @Override
+     @RolesAllowed({XIB_ADMINISTRADOR})
+     public Map<Persona, Collection<String>> llistaProfessorsUsuarisAmbCarrecs(String codiCentre, CursAcademic any) {
+diff --git a/modules/logica/src/es/caib/xibper/logica/ejb/ProfessorServiceEJB.java b/modules/logica/src/es/caib/xibper/logica/ejb/ProfessorServiceEJB.java
+index f91192f368..5ef381c597 100644
+--- a/modules/logica/src/es/caib/xibper/logica/ejb/ProfessorServiceEJB.java
++++ b/modules/logica/src/es/caib/xibper/logica/ejb/ProfessorServiceEJB.java
+@@ -617,4 +617,9 @@ public class ProfessorServiceEJB implements ProfessorService {
+     public void esborraCertificacioCTP(int codiTipusProposta, String codiCentre, CursAcademic any) {
+         impl.esborraCertificacioCTP(codiTipusProposta, codiCentre, any);
+     }
++
++    @Override
++    public Collection<CarrecProfessor> cercaCarrecsDeProfessors(String codiCentre, Collection<String> codisProfessors, Date dataCerca) {
++        return impl.cercaCarrecsDeProfessors(codiCentre, codisProfessors, dataCerca) ;
++    }
+ }
+diff --git a/modules/logica/src/es/caib/xibper/logica/servei/DestinacioProfessorService.java b/modules/logica/src/es/caib/xibper/logica/servei/DestinacioProfessorService.java
+index f0f7bddaeb..90aa3aae45 100644
+--- a/modules/logica/src/es/caib/xibper/logica/servei/DestinacioProfessorService.java
++++ b/modules/logica/src/es/caib/xibper/logica/servei/DestinacioProfessorService.java
+@@ -33,11 +33,11 @@ public interface DestinacioProfessorService {
+     /*Proposta d'equip directiu: còpia de llistaProfessorsDestinatsPlaca amb altres restriccions de dates (hauran de sortir les persones proposades en el futur)*/
+     Collection<DestinacioProfessor> llistaProfessorsDestinatsPlacaPropEquipDirectiu(String codiCentre, CursAcademic any);
+ 
+-   void modifica(DestinacioProfessor destinacioProfessor);
+-   void esborraDestinacioProfessor(Long codiDestinacio);
+-   DestinacioProfessor carregaDestinacio(long codiDestinacio);
+-   DestinacioProfessor carregaDestinacioActiva(String codiProfessor, String centre);
+-   Collection<DestinacioProfessor> cercaDestinacioProfessor(String codiProfessor, Date data);
++    void modifica(DestinacioProfessor destinacioProfessor);
++    void esborraDestinacioProfessor(Long codiDestinacio);
++    DestinacioProfessor carregaDestinacio(long codiDestinacio);
++    DestinacioProfessor carregaDestinacioActiva(String codiProfessor, String centre);
++    Collection<DestinacioProfessor> cercaDestinacioProfessor(String codiProfessor, Date data);
+ 
+     Collection<String> llistaProfessorsDestinatsCentres(Collection<String> centres);
+     Collection<Persona> llistaProfessorsDestinatsAmbHorari(String codiCentre, CursAcademic any, Date data);
+@@ -46,7 +46,7 @@ public interface DestinacioProfessorService {
+     Collection<Persona> llistaProfessorsDestinatsAny(String codiCentre, CursAcademic any);
+     Collection<DestinacioProfessor> llistaDestinacionsProfessorCentre(String codiProfessor, String codiCentre);
+ 
+-    
++
+     Collection<DestinacioProfessor> llistaTotesDestinacionsProfessorCentre(String codiProfessor, String codiCentre);
+     Collection<DestinacioProfessor> llistaTotesDestinacionsProfessor(String codiProfessor);
+     Collection<DestinacioProfessor> llistaTotesDestinacionsProfessorCentreAny(String codiProfessor, String codiCentre, CursAcademic any);
+@@ -141,7 +141,6 @@ public interface DestinacioProfessorService {
+     List<DestinacioProfessor> llistaDestinacionsPerFuncio(String codiCentre, long codiFuncio, Date data);
+     List<SubstitucioProfessor> llistaSubstitucioProfessorPerFuncio(String codiCentre, long codiFuncio, Date data);
+ 
+-
+     List<DestinacioProfessor> llistaDestinacions(String codiCentre, Date data);
+     List<SubstitucioProfessor> llistaSubstitucioProfessor(String codiCentre, Date data);
+ 
+@@ -149,4 +148,5 @@ public interface DestinacioProfessorService {
+ 
+     Map<Persona,Collection<String>> llistaProfessorsUsuarisAmbCarrecs(String codiCentre, CursAcademic any);
+ 
++    Collection<DestinacioProfessor> llistaDestinacions(Collection<String> codisProfessors, String codiCentre, Date dataCerca);
+ }
+diff --git a/modules/logica/src/es/caib/xibper/logica/servei/ProfessorService.java b/modules/logica/src/es/caib/xibper/logica/servei/ProfessorService.java
+index e21dfb3ad4..b4219d0bef 100644
+--- a/modules/logica/src/es/caib/xibper/logica/servei/ProfessorService.java
++++ b/modules/logica/src/es/caib/xibper/logica/servei/ProfessorService.java
+@@ -195,4 +195,6 @@ public interface ProfessorService  {
+     Collection<Professor> llistaProfessorsCos(CursAcademic any, String codiCentre, int codiCos);
+     void desaCertificacioCTP(CertificacioCTP certificacioCTP);
+     void esborraCertificacioCTP(int codiTipusProposta, String codiCentre, CursAcademic any);
++
++    Collection<CarrecProfessor> cercaCarrecsDeProfessors(String codiCentre, Collection<String> codisProfessors, Date dataCerca);
+ }
+diff --git a/modules/logica/src/es/caib/xibper/logica/servei/impl/DestinacioProfessorServiceImpl.java b/modules/logica/src/es/caib/xibper/logica/servei/impl/DestinacioProfessorServiceImpl.java
+index 7e3e89690b..5f441e3cb9 100644
+--- a/modules/logica/src/es/caib/xibper/logica/servei/impl/DestinacioProfessorServiceImpl.java
++++ b/modules/logica/src/es/caib/xibper/logica/servei/impl/DestinacioProfessorServiceImpl.java
+@@ -790,5 +790,10 @@ public class DestinacioProfessorServiceImpl implements DestinacioProfessorServic
+     public List<SubstitucioProfessor> llistaSubstitucioProfessor(String codiCentre, Date data) {
+         return dao.llistaSubstitucioProfessor(codiCentre, data);
+     }
+-   
++
++    @Override
++    public Collection<DestinacioProfessor> llistaDestinacions(Collection<String> codisProfessors, String codiCentre, Date dataCerca) {
++        return dao.llistaDestinacioProfessors(codisProfessors, codiCentre, dataCerca);
++    }
++
+ }
+diff --git a/modules/logica/src/es/caib/xibper/logica/servei/impl/ProfessorServiceImpl.java b/modules/logica/src/es/caib/xibper/logica/servei/impl/ProfessorServiceImpl.java
+index e6f2e13c1e..cb0670dd2e 100644
+--- a/modules/logica/src/es/caib/xibper/logica/servei/impl/ProfessorServiceImpl.java
++++ b/modules/logica/src/es/caib/xibper/logica/servei/impl/ProfessorServiceImpl.java
+@@ -1447,4 +1447,9 @@ public class ProfessorServiceImpl implements ProfessorService {
+         }
+ 
+     }
++
++    @Override
++    public Collection<CarrecProfessor> cercaCarrecsDeProfessors(String codiCentre, Collection<String> codisProfessors, Date dataCerca) {
++        return dao.cercaCarrecsDeProfessors(codiCentre, codisProfessors, dataCerca) ;
++    }
+ }
+diff --git a/modules/sessionFactory/hibernate/es/caib/xibper/logica/dao/hibernate/consultes/consultesProfessor.hbm.xml b/modules/sessionFactory/hibernate/es/caib/xibper/logica/dao/hibernate/consultes/consultesProfessor.hbm.xml
+index 6994153eac..fe0bfb11de 100644
+--- a/modules/sessionFactory/hibernate/es/caib/xibper/logica/dao/hibernate/consultes/consultesProfessor.hbm.xml
++++ b/modules/sessionFactory/hibernate/es/caib/xibper/logica/dao/hibernate/consultes/consultesProfessor.hbm.xml
+@@ -1446,6 +1446,16 @@
+         order by professor.codi
+     </query>
+ 
++    <query name="xibper.getDestinacioProfessors">
++        select distinct(destinacioProfessor)
++        from DestinacioProfessor destinacioProfessor
++          join fetch destinacioProfessor.persona persona
++          join fetch destinacioProfessor.jornadaProfessor
++        where destinacioProfessor.professorCentre.id.codiCentre = :codiCentre
++          and persona.codi in (:codisProfessor)
++          and :dataCerca between destinacioProfessor.dataAlta and nvl(destinacioProfessor.dataBaixa, sysdate)
++    </query>
++
+     <sql-query name="xibper.getNombreDestinacionsPerFuncio">
+         SELECT rlf_pfucod, pds_pjocod, count(distinct(pds_procod))
+         FROM xib_prodst
+@@ -1776,5 +1786,13 @@
+         from FuncioProfessor  funcioProfessor
+         where funcio= :codiFuncioSIGP
+     </query>
+-
++    <query name="xibper.cercaCarrecsDeProfessors">
++        select distinct(carrecProfessor)
++        from CarrecProfessor carrecProfessor
++            join fetch carrecProfessor.carrec carrec
++            join fetch carrecProfessor.professor professor
++        where carrecProfessor.centre.codi = :codiCentre
++        and professor.codi in (:codisProfessors)
++        and :dataCerca between carrecProfessor.dataAlta and nvl(carrecProfessor.dataBaixa, sysdate)
++    </query>
+ </hibernate-mapping>
+diff --git a/modules/www/src/es/caib/xestib/www/controladors/reports/ControladorReportsProfessorat.java b/modules/www/src/es/caib/xestib/www/controladors/reports/ControladorReportsProfessorat.java
+index 9738146e0a..940717d92e 100644
+--- a/modules/www/src/es/caib/xestib/www/controladors/reports/ControladorReportsProfessorat.java
++++ b/modules/www/src/es/caib/xestib/www/controladors/reports/ControladorReportsProfessorat.java
+@@ -89,8 +89,6 @@ public class ControladorReportsProfessorat {
+     @Autowired
+     private es.caib.xibimp.logica.servei.ProfessorService professorService;
+     @Autowired
+-    private es.caib.xibper.logica.servei.ProfessorService professorServicePer;
+-    @Autowired
+     private es.caib.xibtme.logica.servei.ProfessorService professorServiceXibtme;
+     @Autowired
+     private es.caib.xibper.logica.servei.ProfessorService professorServiceXibper;
+@@ -1298,13 +1296,13 @@ public class ControladorReportsProfessorat {
+         Date inici = any.getDataInici();
+         Date fi = new Date();
+         Map<Persona, Integer> mapaSessions = new HashMap<>();
+-        for (ProfessorSubstitutGuardia s : professorServicePer.llistaSessionsGuardia(codiCentre, null, null,inici, fi)){
++        for (ProfessorSubstitutGuardia s : professorServiceXibper.llistaSessionsGuardia(codiCentre, null, null,inici, fi)){
+             Persona professorGuardia = s.getProfessorGuardia().getPersona();
+             Integer sessions = mapaSessions.get(professorGuardia);
+             mapaSessions.put(professorGuardia, MoreObjects.firstNonNull(sessions, 0) + 1);
+         }
+         Collection<ControladorProfessor.RecompteGuardies> resultat = new ArrayList<>();
+-        for (ProfessorCentre p : professorServicePer.llistaProfessorsActiusCentre(FiltreConfiguracio.obteCentre(sessio).getCodi())){
++        for (ProfessorCentre p : professorServiceXibper.llistaProfessorsActiusCentre(FiltreConfiguracio.obteCentre(sessio).getCodi())){
+             Persona professor = p.getProfessor().getPersona();
+             Integer sessions = MoreObjects.firstNonNull(mapaSessions.get(professor), 0);
+             resultat.add(ControladorProfessor.RecompteGuardies.newInstance(professor, sessions));
+@@ -1616,63 +1614,120 @@ public class ControladorReportsProfessorat {
+                                           Model model,
+                                           Locale locale,
+                                           @RequestParam String codiCentre,
+-                                          @RequestParam String[] codiPersona){
+-
+-        Map<Persona, Map<Integer, Tupla<Float, String>>> horariDetallatPerProfessor = documentHorariService.generaHorariIndividualDetallatProfessors(Arrays.asList(codiPersona), codiCentre, FiltreConfiguracio.obteCurs(sessio).getAnyInicial(), Idioma.IDIOMA_APLICACIO, new Date());
+-        Map<Integer, AgrupacioActivitat> agrupacionsActivitatsComplementaries = obteAgrupacioActivitat(locale.getLanguage(), AgrupacioActivitat.HI.SESSIONS_COMPLEMENTARIES);
+-        Map<Integer, AgrupacioActivitat> agrupacionsLectives = obteAgrupacioActivitat(locale.getLanguage(), AgrupacioActivitat.HI.SESSIONS_LECTIVES);
++                                          @RequestParam String[] codiPersona,
++                                          @RequestParam @DateTimeFormat(pattern = "dd/MM/yyyy") Date dataHorari
++                                                 ){
+ 
+         model.addAttribute("centre", centreService.carregaCentre(codiCentre));
+-        model.addAttribute("agrupacionsActivitatsComplementaries", agrupacionsActivitatsComplementaries);
+-        model.addAttribute("agrupacionsLectives", agrupacionsLectives);
+-        model.addAttribute("horariDetallatPerProfessor", horariDetallatPerProfessor);
++        model.addAttribute("agrupacionsActivitatsComplementaries", obteAgrupacioActivitat(locale.getLanguage(), AgrupacioActivitat.HI.SESSIONS_COMPLEMENTARIES));
++        model.addAttribute("agrupacionsLectives", obteAgrupacioActivitat(locale.getLanguage(), AgrupacioActivitat.HI.SESSIONS_LECTIVES));
++        model.addAttribute("horariDetallatPerProfessor", documentHorariService.generaHorariIndividualDetallatProfessors(Arrays.asList(codiPersona), codiCentre, FiltreConfiguracio.obteCurs(sessio).getAnyInicial(), Idioma.IDIOMA_APLICACIO, new Date()));
++        model.addAttribute("jornadesPerProfessor", generaJornades(codiCentre, codiPersona, dataHorari));
++        model.addAttribute("carrecsPerProfessor", generaCarrecsDelsProfessors(codiCentre, codiPersona, dataHorari));
+ 
+         return "llistes/professorat/informeProfessoratDetallat.jsp";
+     }
+ 
++    private Map<String, String> generaCarrecsDelsProfessors(String codiCentre, String[] codiPersona, Date dataHorari) {
++        Map<String, String> carrecsProfessors = new HashMap<>();
++        for (Map.Entry<String, Collection<Carrec>> dadesCarrecsProfessor : obteCarrecsPerProfessor(codiCentre, codiPersona, dataHorari).entrySet()) {
++            carrecsProfessors.put(dadesCarrecsProfessor.getKey(), obteCarrecs(dadesCarrecsProfessor.getValue()));
++        }
++
++        return carrecsProfessors;
++    }
++
++    private Map<String, String> generaJornades(String codiCentre, String[] codiPersona, Date dataHorari) {
++        Map<String, String> jornadaPerPersona = new HashMap<>();
++        for (Map.Entry<String, Collection<DestinacioProfessor>> dadesJornadesProfessor : obteDestinacions(codiCentre, codiPersona, dataHorari).entrySet()) {
++            jornadaPerPersona.put(dadesJornadesProfessor.getKey(), obteJornada(dadesJornadesProfessor.getValue()));
++        }
++
++        return jornadaPerPersona;
++    }
++
+     @RequestMapping(value = "informeProfessoratDetallat.xls", method = RequestMethod.GET)
+-    public ModelAndView informeProfessoratDetallatXLS(HttpSession sessio, Locale locale, HttpServletResponse response,
++    public ModelAndView informeProfessoratDetallatXLS(HttpSession sessio, Locale locale,
+                                                       @RequestParam String codiCentre,
+-                                                      @RequestParam String[] codiPersona)
++                                                      @RequestParam String[] codiPersona,
++                                                      @RequestParam @DateTimeFormat(pattern = "dd/MM/yyyy") Date dataHorari
++                                                      )
+             throws IOException, WriteException {
+ 
+-
+         Map<Persona, Map<Integer, Tupla<Float, String>>> horariDetallatPerProfessor = documentHorariService.generaHorariIndividualDetallatProfessors(Arrays.asList(codiPersona), codiCentre, FiltreConfiguracio.obteCurs(sessio).getAnyInicial(), Idioma.IDIOMA_APLICACIO, new Date());
++        Map<String, Collection<DestinacioProfessor>> dadesDestinacions = obteDestinacions(codiCentre, codiPersona, dataHorari);
++        Map<String, Collection<Carrec>> carrecsProfessor1 = obteCarrecsPerProfessor(codiCentre, codiPersona, dataHorari);
+         Map<Integer, AgrupacioActivitat> agrupacionsActivitatsComplementaries = obteAgrupacioActivitat(locale.getLanguage(), AgrupacioActivitat.HI.SESSIONS_COMPLEMENTARIES);
+         Map<Integer, AgrupacioActivitat> agrupacionsLectives = obteAgrupacioActivitat(locale.getLanguage(), AgrupacioActivitat.HI.SESSIONS_LECTIVES);
+ 
+         Centre centre = centreService.carregaCentre(codiCentre);
+ 
+         logger.log(Entorn.NIVELL_LOG, "Codi centre: " + codiCentre + " nom: " + centre.getNomITipus());
++        ExcelUtil excel = generaExcelHorariDetallatProfessorat(locale, horariDetallatPerProfessor, dadesDestinacions, agrupacionsActivitatsComplementaries, agrupacionsLectives, carrecsProfessor1);
++
++        return excel.creaVista("informe_professorat_detallat_" + centre.getNomITipus() + "-"
++                + new SimpleDateFormat("yyyy-MM-dd").format(new Date()) + ".xls");
++    }
++
++    private Map<String, Collection<Carrec>> obteCarrecsPerProfessor(String codiCentre, String[] codiPersona, Date dataHorari) {
++        Collection<CarrecProfessor> carrecsProfessor = professorServiceXibper.cercaCarrecsDeProfessors(codiCentre, Arrays.asList(codiPersona), dataHorari);
++        Multimap<String, Carrec> carrecsPerProfessor = LinkedHashMultimap.create();
++        for (CarrecProfessor carrecProfessor : carrecsProfessor) {
++            logger.log(Entorn.NIVELL_LOG, "codiProfessor: " + carrecProfessor.getProfessor().getCodi() + " carrec: " + carrecProfessor.getCodi());
++            carrecsPerProfessor.put(carrecProfessor.getProfessor().getCodi(), carrecProfessor.getCarrec());
++        }
++        return carrecsPerProfessor.asMap();
++    }
++
++    private Map<String, Collection<DestinacioProfessor>> obteDestinacions(String codiCentre, String[] codiPersona, Date dataHorari) {
++        Collection<DestinacioProfessor> destinacions = destinacioProfessorService.llistaDestinacions(Arrays.asList(codiPersona), codiCentre, dataHorari);
++        logger.log(Entorn.NIVELL_LOG, "Destinacions: " + destinacions.size());
++        Multimap<String, DestinacioProfessor> mapaFiltre = HashMultimap.create();
++        for (DestinacioProfessor destinacion : destinacions) {
++            mapaFiltre.put(destinacion.getPersona().getCodi(), destinacion);
++        }
++        return mapaFiltre.asMap();
++    }
++
++    private ExcelUtil generaExcelHorariDetallatProfessorat(Locale locale,
++                                                           Map<Persona, Map<Integer, Tupla<Float, String>>> horariDetallatPerProfessor,
++                                                           Map<String, Collection<DestinacioProfessor>> dadesDestinacions,
++                                                           Map<Integer, AgrupacioActivitat> agrupacionsActivitatsComplementaries,
++                                                           Map<Integer, AgrupacioActivitat> agrupacionsLectives,
++                                                           Map<String, Collection<Carrec>> carrecsProfessor) throws IOException, WriteException {
+         ExcelUtil excel = new ExcelUtil("Informe Professorat Detallat");
+         int filaActual = 0;
+         int columnaActual = 0;
+ 
+         WritableSheet sheet = excel.getSheet();
+-        WritableFont boldFont = new WritableFont(WritableFont.ARIAL, 14, WritableFont.BOLD);
+-        WritableFont arial10Font = new WritableFont(WritableFont.ARIAL, 9, WritableFont.BOLD);
++        WritableFont arialTitleFont = new WritableFont(WritableFont.ARIAL, 14, WritableFont.BOLD);
++        WritableFont arial9FontBold = new WritableFont(WritableFont.ARIAL, 9, WritableFont.BOLD);
+ 
+-        WritableCellFormat titolFormat = new WritableCellFormat(boldFont);
++        WritableCellFormat titolFormat = new WritableCellFormat(arialTitleFont);
+         titolFormat.setVerticalAlignment(VerticalAlignment.CENTRE);
+ 
+-        WritableCellFormat arial10GreyCellFormat = getWritableGreyCellFormat(arial10Font);
+-        WritableCellFormat arial10CellFormat = getWritableCellFormat(arial10Font, Alignment.CENTRE);
++        WritableCellFormat arial9GreyCellFormatBold = getWritableGreyCellFormat(arial9FontBold);
++        WritableCellFormat arial9CellFormatBold = getWritableCellFormat(arial9FontBold, Alignment.CENTRE);
+ 
+-        Label label1 = new Label(4, filaActual, "Sessions/Hores Lectives", arial10GreyCellFormat);
++        Label label1 = new Label(7, filaActual, "Sessions/Hores Lectives", arial9GreyCellFormatBold);
+         sheet.addCell(label1);
+-        sheet.mergeCells(4, filaActual, (agrupacionsLectives.keySet().size() * 2) + 3, filaActual);
+-        Label label2 = new Label(((agrupacionsLectives.keySet().size())*2)+4, filaActual, "Sessions/Hores Complementaries", arial10GreyCellFormat);
++        int columnesInicial = 5;
++        sheet.mergeCells(7, filaActual, (agrupacionsLectives.keySet().size() * 2) + columnesInicial, filaActual);
++        Label label2 = new Label(((agrupacionsLectives.keySet().size())*2)+columnesInicial+1, filaActual, "Sessions/Hores Complementaries", arial9GreyCellFormatBold);
+         sheet.addCell(label2);
+-        sheet.mergeCells(((agrupacionsLectives.keySet().size())*2)+4, filaActual, ((agrupacionsActivitatsComplementaries.keySet().size() + agrupacionsLectives.keySet().size())*2)+3, filaActual);
++        sheet.mergeCells(((agrupacionsLectives.keySet().size())*2)+columnesInicial+1, filaActual, ((agrupacionsActivitatsComplementaries.keySet().size() + agrupacionsLectives.keySet().size())*2) + columnesInicial, filaActual);
+ 
+         filaActual++;
+ 
+         Collection<String> capcaleres = new ArrayList<>();
+ 
+-        sheet.addCell(new Label(columnaActual++, filaActual, "Llinatge 1", arial10GreyCellFormat));
+-        sheet.addCell(new Label(columnaActual++, filaActual, "Llinatge 2", arial10GreyCellFormat));
+-        sheet.addCell(new Label(columnaActual++, filaActual, "Nom", arial10GreyCellFormat));
+-        sheet.addCell(new Label(columnaActual++, filaActual, "Identificació", arial10GreyCellFormat));
++        sheet.addCell(new Label(columnaActual++, filaActual, "Llinatge 1", arial9GreyCellFormatBold));
++        sheet.addCell(new Label(columnaActual++, filaActual, "Llinatge 2", arial9GreyCellFormatBold));
++        sheet.addCell(new Label(columnaActual++, filaActual, "Nom", arial9GreyCellFormatBold));
++        sheet.addCell(new Label(columnaActual++, filaActual, "Identificació", arial9GreyCellFormatBold));
++        sheet.addCell(new Label(columnaActual++, filaActual, "Jornada", arial9GreyCellFormatBold));
++        sheet.addCell(new Label(columnaActual++, filaActual, "Carrecs", arial9GreyCellFormatBold));
++        sheet.addCell(new Label(columnaActual++, filaActual, "Directiu", arial9GreyCellFormatBold));
+         for (AgrupacioActivitat agrupacio: agrupacionsLectives.values()) {
+             capcaleres.add(agrupacio.getTraduccions().get(locale.getLanguage()).getNom());
+         }
+@@ -1680,7 +1735,7 @@ public class ControladorReportsProfessorat {
+             capcaleres.add(agrupacio.getTraduccions().get(locale.getLanguage()).getNom());
+         }
+         for (String camp : capcaleres){
+-            Label label = new Label(columnaActual, filaActual, camp, arial10GreyCellFormat);
++            Label label = new Label(columnaActual, filaActual, camp, arial9GreyCellFormatBold);
+             sheet.addCell(label);
+             sheet.mergeCells(columnaActual, filaActual, columnaActual+1, filaActual);
+             columnaActual += 2;
+@@ -1688,26 +1743,75 @@ public class ControladorReportsProfessorat {
+         filaActual++;
+         for (Map.Entry<Persona, Map<Integer, Tupla<Float, String>>> horariProfessor: horariDetallatPerProfessor.entrySet()) {
+             columnaActual = 0;
+-            sheet.addCell(new Label(columnaActual++, filaActual, UtilCadena.capitalizeNom(horariProfessor.getKey().getNom().getLlinatge1().toLowerCase(Locale.ROOT)), arial10GreyCellFormat));
+-            sheet.addCell(new Label(columnaActual++, filaActual, UtilCadena.capitalizeNom(horariProfessor.getKey().getNom().getLlinatge2().toLowerCase(Locale.ROOT)), arial10GreyCellFormat));
+-            sheet.addCell(new Label(columnaActual++, filaActual, UtilCadena.capitalizeNom(horariProfessor.getKey().getNom().getNom().toLowerCase(Locale.ROOT)), arial10GreyCellFormat));
+-            sheet.addCell(new Label(columnaActual++, filaActual, horariProfessor.getKey().getIdentificacio(), arial10GreyCellFormat));
++            sheet.addCell(new Label(columnaActual++, filaActual, UtilCadena.capitalizeNom(horariProfessor.getKey().getNom().getLlinatge1().toLowerCase(Locale.ROOT)), arial9GreyCellFormatBold));
++            sheet.addCell(new Label(columnaActual++, filaActual, UtilCadena.capitalizeNom(horariProfessor.getKey().getNom().getLlinatge2().toLowerCase(Locale.ROOT)), arial9GreyCellFormatBold));
++            sheet.addCell(new Label(columnaActual++, filaActual, UtilCadena.capitalizeNom(horariProfessor.getKey().getNom().getNom().toLowerCase(Locale.ROOT)), arial9GreyCellFormatBold));
++            sheet.addCell(new Label(columnaActual++, filaActual, horariProfessor.getKey().getIdentificacio(), arial9CellFormatBold));
++            sheet.addCell(new Label(columnaActual++, filaActual, obteJornada(dadesDestinacions.get(horariProfessor.getKey().getCodi())), arial9CellFormatBold));
++            sheet.addCell(new Label(columnaActual++, filaActual, obteCarrecs(carrecsProfessor.get(horariProfessor.getKey().getCodi())), arial9CellFormatBold));
++            sheet.addCell(new Label(columnaActual++, filaActual, obteTeCarrecDirectiu(carrecsProfessor.get(horariProfessor.getKey().getCodi())), arial9CellFormatBold));
+             Map<Integer, Tupla<Float, String>> horariProfessorValue = horariProfessor.getValue();
+             for (Map.Entry<Integer, AgrupacioActivitat> agrupacio: agrupacionsLectives.entrySet()) {
+-                sheet.addCell(new Label(columnaActual++, filaActual, Float.toString(horariProfessorValue.get(agrupacio.getKey()).getPrimer()), arial10CellFormat));
+-                sheet.addCell(new Label(columnaActual++, filaActual, horariProfessorValue.get(agrupacio.getKey()).getSegon(), arial10CellFormat));
++                sheet.addCell(new Label(columnaActual++, filaActual, Float.toString(horariProfessorValue.get(agrupacio.getKey()).getPrimer()), arial9CellFormatBold));
++                sheet.addCell(new Label(columnaActual++, filaActual, horariProfessorValue.get(agrupacio.getKey()).getSegon(), arial9CellFormatBold));
+             }
+             for (Map.Entry<Integer, AgrupacioActivitat> agrupacio: agrupacionsActivitatsComplementaries.entrySet()) {
+-                sheet.addCell(new Label(columnaActual++, filaActual, Float.toString(horariProfessorValue.get(agrupacio.getKey()).getPrimer()), arial10CellFormat));
+-                sheet.addCell(new Label(columnaActual++, filaActual, horariProfessorValue.get(agrupacio.getKey()).getSegon(), arial10CellFormat));
++                sheet.addCell(new Label(columnaActual++, filaActual, Float.toString(horariProfessorValue.get(agrupacio.getKey()).getPrimer()), arial9CellFormatBold));
++                sheet.addCell(new Label(columnaActual++, filaActual, horariProfessorValue.get(agrupacio.getKey()).getSegon(), arial9CellFormatBold));
+             }
+             filaActual++;
+         }
+ 
+         excel.tancaExcel();
++        return excel;
++    }
+ 
+-        return excel.creaVista("informe_professorat_detallat_" + centre.getNomITipus() + "-"
+-                + new SimpleDateFormat("yyyy-MM-dd").format(new Date()) + ".xls");
++    private String obteTeCarrecDirectiu(Collection<Carrec> carrecProfessors) {
++        if (carrecProfessors == null) return "-";
++        String esDirectiu = "No";
++
++        for (Carrec carrecProfessor : carrecProfessors) {
++            if (carrecProfessor.getDirectiu()) {
++                esDirectiu = "Sí";
++                return esDirectiu;
++            }
++        }
++
++        return esDirectiu;
++    }
++
++    private String obteCarrecs(Collection<Carrec> carrecProfessors) {
++        if (carrecProfessors == null) return "-";
++        StringBuilder carrecs = new StringBuilder();
++
++        Iterator<Carrec> iterator = carrecProfessors.iterator();
++        while (iterator.hasNext()) {
++            Carrec carrec = iterator.next();
++            carrecs.append(carrec.getTraduccions().get(Idioma.IDIOMA_APLICACIO).getNom());
++            if (carrecProfessors.size() > 1 && iterator.hasNext()) {
++                carrecs.append(", ");
++            }
++        }
++
++        return carrecs.toString();
++    }
++
++    private String obteJornada(Collection<DestinacioProfessor> dadesDestinacions) {
++        String jornada = "Baixa";
++        if (dadesDestinacions == null || dadesDestinacions.isEmpty()) return jornada;
++
++        if (dadesDestinacions.size() == 1) {
++            jornada = dadesDestinacions.iterator().next().getJornadaProfessor().getTraduccions().get(Idioma.IDIOMA_APLICACIO).getNom();
++        } else if (dadesDestinacions.size() == 2) { //cas especial per CC, poden tenir 2 mitjes jornades
++            jornada = "2 mitjes jornades";
++            for (DestinacioProfessor dadesDestinacion : dadesDestinacions) {
++                if (dadesDestinacion.getJornadaProfessor().getCodi().equals(JornadaProfessor.COMPLETA)) {
++                    jornada = "Jornades incompatibles amb normativa";
++                    break;
++                }
++            }
++        }
++        return jornada;
+     }
+ 
+     private WritableCellFormat getWritableCellFormat(WritableFont arial10Font, Alignment alignment) throws WriteException {
+diff --git a/modules/www/xestib.war/WEB-INF/views/llistes/professorat/informeProfessoratDetallat.jsp b/modules/www/xestib.war/WEB-INF/views/llistes/professorat/informeProfessoratDetallat.jsp
+index 7719d6be2c..df2679d4da 100644
+--- a/modules/www/xestib.war/WEB-INF/views/llistes/professorat/informeProfessoratDetallat.jsp
++++ b/modules/www/xestib.war/WEB-INF/views/llistes/professorat/informeProfessoratDetallat.jsp
+@@ -8,6 +8,8 @@
+ <%--@elvariable id="horariDetallatPerProfessor" type="java.util.Map<es.caib.xibalu.logica.domini.persona.Persona, java.util.Map<java.lang.Integer, es.caib.xestib.util.Tupla<java.lang.Float, java.lang.String>>>"--%>
+ <%--@elvariable id="agrupacionsActivitatsComplementaries" type="java.util.Map<java.lang.Integer, es.caib.xibtme.logica.domini.professor.AgrupacioActivitat>"--%>
+ <%--@elvariable id="agrupacionsLectives" type="java.util.Map<java.lang.Integer, es.caib.xibtme.logica.domini.professor.AgrupacioActivitat>"--%>
++<%--@elvariable id="jornadesPerProfessor" type="java.util.Map<java.lang.String, java.lang.String>"--%>
++<%--@elvariable id="carrecsPerProfessor" type="java.util.Map<java.lang.String, java.lang.String>"--%>
+ 
+ <jsp:useBean id="sessio" class="es.caib.xibhor.logica.domini.horaris.SessioHoraria"/>
+ 
+@@ -36,10 +38,12 @@
+ 	<h3>${centre.nomAmbTipusICodi}</h3>
+ 	<div class="row">
+ 		<div class="col-md-12">
+-			<table class="table table-hover table-bordered table-striped">
++			<table class="table table-hover table-bordered table-striped" >
+ 				<thead>
+ 				<tr>
+ 					<th rowspan="3" colspan="2" class="th_principal_capcelera">Llinatges i Nom</th>
++					<th rowspan="3" colspan="2" class="th_principal_capcelera">Jornada</th>
++					<th rowspan="3" colspan="2" class="th_principal_capcelera">Carrec/s</th>
+ 					<th colspan="<c:out value="${fn:length(agrupacionsLectives)*2}"/>" class="th_principal_capcelera">Sessions/hores
+ 						lectives
+ 					</th>
+@@ -69,6 +73,8 @@
+ 				<c:forEach items="${horariDetallatPerProfessor}" var="horariDetallat">
+ 					<tr>
+ 						<td style="text-transform: capitalize" class="td_PrincipalAlu" colspan="2">${fn:toLowerCase(horariDetallat.key.nom.llinatgesINom)}</td>
++						<td style="text-transform: capitalize" class="td_PrincipalAlu" colspan="2">${jornadesPerProfessor[horariDetallat.key.codi]}</td>
++						<td style="text-transform: capitalize" class="td_PrincipalAlu" colspan="2">${carrecsPerProfessor[horariDetallat.key.codi]}</td>
+ 						<c:forEach var="agrupacioLectiva" items="${agrupacionsLectives}">
+ 							<td class="td_PrincipalAlu"><span title="Sessions de ${agrupacioLectiva.value.traduccions[locale].nom}">${horariDetallat.value[agrupacioLectiva.key].primer}</span></td>
+ 							<td class="td_PrincipalAlu"><span title="Hores de ${agrupacioLectiva.value.traduccions[locale].nom}">${horariDetallat.value[agrupacioLectiva.key].segon}</span></td>
+diff --git a/modules/www/xestib.war/js/llistes/llistaHorariProfessoratDetall.js b/modules/www/xestib.war/js/llistes/llistaHorariProfessoratDetall.js
+index fa2df84b52..2d645fb884 100644
+--- a/modules/www/xestib.war/js/llistes/llistaHorariProfessoratDetall.js
++++ b/modules/www/xestib.war/js/llistes/llistaHorariProfessoratDetall.js
+@@ -83,7 +83,7 @@ app.controller('LlistaHorariProfessoratDetallController', ['$scope', '$window',
+         .then(function (response) {
+           obj.loadingModal.hide();
+           $(response.data).find('professor').each(function(){
+-            obj.professorat.push({codiPersona: $(this).attr("codi"), nomProfessor : $(this).attr('nomNormalitzat'), seleccionat:false});
++            obj.professorat.push({codiPersona: $(this).attr("codi"), nomProfessor : $(this).attr('nomComplert'), seleccionat:false});
+           });
+         }, function () {
+           obj.loadingModal.hide();
+@@ -103,7 +103,7 @@ app.controller('LlistaHorariProfessoratDetallController', ['$scope', '$window',
+     }
+ 
+     obj.generanInforme = function(_tipusInforme) {
+-      var params  = 'tipusInforme=' + _tipusInforme + "&codiCentre=" + obj.selCentre.codi;
++      var params  = 'tipusInforme=' + _tipusInforme + "&codiCentre=" + obj.selCentre.codi + "&dataHorari=" + obj.dataCercaHorari;
+       var existeixenSeleccionats = false;
+       angular.forEach(obj.professorat, function (value) {
+         if (value.seleccionat !== undefined && value.seleccionat) {
+-- 
+GitLab
+
