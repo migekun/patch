@@ -1,0 +1,1559 @@
+diff --git a/modules/logica/src/es/caib/xibimp/logica/dto/ControlHorariProfessorCentreSetmanal.java b/modules/logica/src/es/caib/xibimp/logica/dto/ControlHorariProfessorCentreSetmanal.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..206e8094a783c5fc3ad8edd50f75859850c14fcb
+--- /dev/null
++++ b/modules/logica/src/es/caib/xibimp/logica/dto/ControlHorariProfessorCentreSetmanal.java
+@@ -0,0 +1,32 @@
++package es.caib.xibimp.logica.dto;
++
++import es.caib.xestib.util.Tupla;
++import es.caib.xibtme.logica.domini.persona.NomPersona;
++
++import java.io.Serializable;
++import java.util.Map;
++
++public class ControlHorariProfessorCentreSetmanal implements Serializable {
++    private NomPersona nom;
++    private String jornada;
++    private Map<Integer, Tupla<String, Boolean>> controlPerDia;
++
++    private ControlHorariProfessorCentreSetmanal(NomPersona nom, String jornada, Map<Integer, Tupla<String, Boolean>> controlPerDia) {
++        this.nom = nom;
++        this.jornada = jornada;
++        this.controlPerDia = controlPerDia;
++    }
++
++    public NomPersona getNom() { return nom; }
++    public void setNom(NomPersona nom) { this.nom = nom; }
++
++    public String getJornada() { return jornada; }
++    public void setJornada(String jornada) { this.jornada = jornada; }
++
++    public Map<Integer, Tupla<String, Boolean>> getControlPerDia() { return controlPerDia; }
++    public void setControlPerDia(Map<Integer, Tupla<String, Boolean>> controlPerDia) { this.controlPerDia = controlPerDia;}
++
++    public static ControlHorariProfessorCentreSetmanal newInstance(NomPersona nomPersona, String jornada, Map<Integer, Tupla<String, Boolean>> horesPermanenciaPerDia) {
++        return new ControlHorariProfessorCentreSetmanal(nomPersona, jornada, horesPermanenciaPerDia);
++    }
++}
+diff --git a/modules/logica/src/es/caib/xibimp/logica/ejb/InformesServiceEJB.java b/modules/logica/src/es/caib/xibimp/logica/ejb/InformesServiceEJB.java
+index ecb10242082e2bcd55bc84d2376143b50f8e1423..acc3362587153dda17bf07446188017d65deb069 100644
+--- a/modules/logica/src/es/caib/xibimp/logica/ejb/InformesServiceEJB.java
++++ b/modules/logica/src/es/caib/xibimp/logica/ejb/InformesServiceEJB.java
+@@ -745,5 +745,15 @@ public class InformesServiceEJB implements InformesService {
+     public ByteArrayOutputStream generaPdfReclamacions(Collection<Reclamacio> llistaReclamacions, CursAcademic any, ProcesEscolaritzacio proces, Centre centreDesti, Locale locale) {
+         return impl.generaPdfReclamacions(llistaReclamacions, any, proces, centreDesti, locale);
+     }
++
++    @Override
++    public ByteArrayOutputStream llistaHoresPermanenciaProfessorCentreControlSetmanal(String codiCentre, CursAcademic any, String codiIdioma) {
++        return impl.llistaHoresPermanenciaProfessorCentreControlSetmanal(codiCentre, any, codiIdioma);
++    }
++
++    @Override
++    public ByteArrayOutputStream llistaPeriodesLectiusProfessorCentreControlSetmanal(String codiCentre, CursAcademic any, String codiIdioma) {
++        return impl.llistaPeriodesLectiusProfessorCentreControlSetmanal(codiCentre, any, codiIdioma);
++    }
+ }
+ 
+diff --git a/modules/logica/src/es/caib/xibimp/logica/servei/InformesService.java b/modules/logica/src/es/caib/xibimp/logica/servei/InformesService.java
+index d36c53d40693a6a0e4a18d1e652f4f51743f5d5c..179dfef539d98aaa1628b9b8b3425c0913248983 100644
+--- a/modules/logica/src/es/caib/xibimp/logica/servei/InformesService.java
++++ b/modules/logica/src/es/caib/xibimp/logica/servei/InformesService.java
+@@ -355,4 +355,8 @@ public interface InformesService {
+     ByteArrayOutputStream generaLlistaSeguimentAlumnatCentre(Centre centre, CursAcademic any, String avaluacio, Collection<Matricula> matricules, String idioma, String format);
+ 
+     ByteArrayOutputStream generaPdfReclamacions(Collection<Reclamacio> llistaReclamacions, CursAcademic any, ProcesEscolaritzacio proces, Centre centreDesti, Locale locale);
++
++    ByteArrayOutputStream llistaHoresPermanenciaProfessorCentreControlSetmanal(String codiCentre, CursAcademic any, String codiIdioma);
++
++    ByteArrayOutputStream llistaPeriodesLectiusProfessorCentreControlSetmanal(String codiCentre, CursAcademic any, String codiIdioma);
+ }
+diff --git a/modules/logica/src/es/caib/xibimp/logica/servei/impl/InformesServiceImpl.java b/modules/logica/src/es/caib/xibimp/logica/servei/impl/InformesServiceImpl.java
+index a61d9de24a972740aa1a944db7face72fbc77bd8..bffd06d13b3cbfafc6dc624da3bf186c2fbc6436 100644
+--- a/modules/logica/src/es/caib/xibimp/logica/servei/impl/InformesServiceImpl.java
++++ b/modules/logica/src/es/caib/xibimp/logica/servei/impl/InformesServiceImpl.java
+@@ -944,11 +944,15 @@ public class InformesServiceImpl implements InformesService {
+ 
+         for (DestinacioProfessor destinacioProfessor: llistaProfessorsDestinats) {
+             Collection<Sessio> sessionsHoraries = horariDao.llistaHorariProfessor(destinacioProfessor.getProfessor().getCodi(), centre.getCodi(), any, null);
++            int tempsLimit = primaria ? ControlHorariComponent.TRENTA_HORES_EN_MINUTS : ControlHorariComponent.VINT_I_CINC_HORES_QUARANTA_MINUTS;
+             dades.addAll(ControlHorariComponent
+                     .newInstance(destinacioProfessor, sessionsHoraries)
+-                    .obteHoresPermanenciaProfessorCentre(primaria));
++                    .obteHoresPermanenciaProfessorCentre(primaria, tempsLimit));
+         }
+-        HoresPermanenciaProfessorCentreDocument horesPermanenciaProfessorCentreDocument = new HoresPermanenciaProfessorCentreDocument(dades, centre, codiIdioma, primaria, centreService.obteBaosLogoReport(codiCentre));
++        String titol = primaria ?
++                "Professorat amb menys de 30 hores de permanència en el centre (Primària)" :
++                "Professorat amb menys de 25:40 hores de permanència en el centre (Secundària)";
++        HoresPermanenciaProfessorCentreDocument horesPermanenciaProfessorCentreDocument = new HoresPermanenciaProfessorCentreDocument(dades, centre, codiIdioma, titol, centreService.obteBaosLogoReport(codiCentre));
+         return horesPermanenciaProfessorCentreDocument.generaPdf();
+     }
+ 
+@@ -3370,4 +3374,52 @@ public class InformesServiceImpl implements InformesService {
+         baos = reclamacionsDocument.generaPdf();
+         return baos;
+     }
++
++    @Override
++    public ByteArrayOutputStream llistaHoresPermanenciaProfessorCentreControlSetmanal(String codiCentre, CursAcademic any, String codiIdioma) {
++        Centre centre = centreDao.carregaCentre(codiCentre);
++        Collection<ControlHorariProfessorCentreSetmanal> dades = new ArrayList<>();
++
++        Collection<DestinacioProfessor> llistaProfessorsDestinats = getDestinacioProfessors(codiCentre, any, codiIdioma);
++
++        for (DestinacioProfessor destinacioProfessor: llistaProfessorsDestinats) {
++            Collection<Sessio> sessionsHoraries = horariDao.llistaHorariProfessor(destinacioProfessor.getProfessor().getCodi(), centre.getCodi(), any, null);
++            int tempsLimit = ControlHorariComponent.QUATRE_HORES;
++            dades.addAll(ControlHorariComponent
++                    .newInstance(destinacioProfessor, sessionsHoraries)
++                    .obteHoresPermanenciaProfessorCentreControlSetmanal(tempsLimit));
++        }
++        String titol = "Control setmanal permanència professorat secundària (menor de 4 hores) - " + any.getAnyAcademicCurt() ;
++        HorariProfessorCentreControlSetmanalDocument horesPermanenciaProfessorCentreDocument = new HorariProfessorCentreControlSetmanalDocument(dades, centre, codiIdioma, titol, centreService.obteBaosLogoReport(codiCentre));
++        return horesPermanenciaProfessorCentreDocument.generaPdf();
++
++    }
++
++    private Collection<DestinacioProfessor> getDestinacioProfessors(String codiCentre, CursAcademic any, String codiIdioma) {
++        return Collections2.filter(destinacioProfessorDao.llistaProfessorsDestinatsDestinacio(codiCentre, any, codiIdioma), new Predicate<DestinacioProfessor>() {
++            @Override
++            public boolean apply(DestinacioProfessor input) {
++                logger.log(Entorn.NIVELL_LOG, "destinacio: " + input.getPersona().getNom().toString() + " es activa: " + input.getEsDestinacioActiva() + " se muestra? " + (input.getDataBaixa() == null || input.getDataBaixa().after(new Date())));
++                return input.getDataBaixa() == null || input.getDataBaixa().after(new Date());
++            }
++        });
++    }
++
++    @Override
++    public ByteArrayOutputStream llistaPeriodesLectiusProfessorCentreControlSetmanal(String codiCentre, CursAcademic any, String codiIdioma) {
++        Centre centre = centreDao.carregaCentre(codiCentre);
++        Collection<ControlHorariProfessorCentreSetmanal> dades = new ArrayList<>();
++
++        Collection<DestinacioProfessor> llistaProfessorsDestinats = getDestinacioProfessors(codiCentre, any, codiIdioma);
++
++        for (DestinacioProfessor destinacioProfessor: llistaProfessorsDestinats) {
++            Collection<Sessio> sessionsHoraries = horariDao.llistaHorariProfessor(destinacioProfessor.getProfessor().getCodi(), centre.getCodi(), any, null);
++            dades.addAll(ControlHorariComponent
++                    .newInstance(destinacioProfessor, sessionsHoraries)
++                    .obteSessionsLectivesProfessorCentreControlSetmanal(ControlHorariComponent.SESSIONS_MINIMES, ControlHorariComponent.SESSIONS_MAXIMES));
++        }
++        String titol = "Control setmanal períodes lectius professorat secundària - "  + any.getAnyAcademicCurt();
++        HorariProfessorCentreControlSetmanalDocument horesPermanenciaProfessorCentreDocument = new HorariProfessorCentreControlSetmanalDocument(dades, centre, codiIdioma, titol, centreService.obteBaosLogoReport(codiCentre));
++        return horesPermanenciaProfessorCentreDocument.generaPdf();
++    }
+ }
+diff --git a/modules/logica/src/es/caib/xibimp/logica/servei/report/informesCentreDades/HorariProfessorCentreControlSetmanalDocument.java b/modules/logica/src/es/caib/xibimp/logica/servei/report/informesCentreDades/HorariProfessorCentreControlSetmanalDocument.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..b17cb4c09250cb033ce5b024ac0119ca6ea14a8a
+--- /dev/null
++++ b/modules/logica/src/es/caib/xibimp/logica/servei/report/informesCentreDades/HorariProfessorCentreControlSetmanalDocument.java
+@@ -0,0 +1,92 @@
++package es.caib.xibimp.logica.servei.report.informesCentreDades;
++
++import com.itextpdf.text.*;
++import com.itextpdf.text.pdf.BaseFont;
++import es.caib.xestib.util.Tupla;
++import es.caib.xibcen.logica.domini.Centre;
++import es.caib.xibimp.logica.dto.ControlHorariProfessorCentreSetmanal;
++import es.caib.xibimp.logica.servei.report.util.ConstantsReports;
++import es.caib.xibimp.logica.servei.report.util.DocumentPdfPageEventXestib;
++import es.caib.xibimp.logica.servei.report.util.PdfPTableXestib;
++import es.caib.xibimp.logica.servei.report.util.PdfUtils;
++import es.caib.xibtme.logica.domini.tipus.DiaSetmana;
++
++import java.io.ByteArrayOutputStream;
++import java.util.Collection;
++import java.util.Map;
++
++public class HorariProfessorCentreControlSetmanalDocument extends DocumentPdfPageEventXestib {
++    private final PdfUtils pdfUtils;
++    private final Centre centre;
++    private final String idioma;
++    private final ByteArrayOutputStream baosLogoReport;
++    private final Collection<ControlHorariProfessorCentreSetmanal> dades;
++    private final String titol;
++
++    public HorariProfessorCentreControlSetmanalDocument(Collection<ControlHorariProfessorCentreSetmanal> dades, Centre centre, String idioma, String titol, ByteArrayOutputStream baosLogoReport) {
++        super(titol);
++        this.titol = titol;
++        this.pdfUtils = new PdfUtils();
++        this.centre = centre;
++        this.idioma = idioma;
++        this.baosLogoReport = baosLogoReport;
++        this.dades = dades;
++    }
++
++
++    @Override
++    protected void getPDFContent() throws DocumentException {
++        document.add(pdfUtils.generaTaulaCentre(centre, idioma, baosLogoReport));
++        document.add(Chunk.NEWLINE);
++        titolCapceleraHoresLectivesProfessorPDFContent();
++        generaTaulaPermanenciaSetmanal();
++    }
++
++    protected void titolCapceleraHoresLectivesProfessorPDFContent() throws DocumentException {
++        document.add(pdfUtils.generaTitol(titol, ConstantsReports.FONT_TITOL_12));
++        document.add(Chunk.NEWLINE);
++    }
++    private void generaTaulaPermanenciaSetmanal() throws DocumentException {
++        float[] floats = {5, 2, 1,1,1,1,1};
++
++        PdfPTableXestib taula = new PdfPTableXestib(floats);
++        taula.setWidthPercentage(100);
++        taula.setHeaderRows(1);
++        taula.addCellaNoBorderIndent("Professor/a", ConstantsReports.FONT_TEXTE_NEGRETA_8, Element.ALIGN_LEFT);
++        taula.addCellaNoBorderIndent("Jornada", ConstantsReports.FONT_TEXTE_NEGRETA_8, Element.ALIGN_LEFT);
++        taula.addCellaNoBorderIndent("Dl", ConstantsReports.FONT_TEXTE_NEGRETA_8, Element.ALIGN_RIGHT);
++        taula.addCellaNoBorderIndent("Dm", ConstantsReports.FONT_TEXTE_NEGRETA_8, Element.ALIGN_RIGHT);
++        taula.addCellaNoBorderIndent("Dc", ConstantsReports.FONT_TEXTE_NEGRETA_8, Element.ALIGN_RIGHT);
++        taula.addCellaNoBorderIndent("Dj", ConstantsReports.FONT_TEXTE_NEGRETA_8, Element.ALIGN_RIGHT);
++        taula.addCellaNoBorderIndent("Dv", ConstantsReports.FONT_TEXTE_NEGRETA_8, Element.ALIGN_RIGHT);
++
++        int index = 0;
++        for (ControlHorariProfessorCentreSetmanal permanenciaProfessorSetmanal: dades) {
++            taula.addCellaSimple(obteLabel(permanenciaProfessorSetmanal.getNom().getLlinatgesINom()), Element.ALIGN_LEFT, 1, Element.ALIGN_CENTER, 2, index %2 == 0 ? BaseColor.LIGHT_GRAY:null);
++            taula.addCellaSimple(obteLabel(permanenciaProfessorSetmanal.getJornada()), Element.ALIGN_LEFT, 1, Element.ALIGN_CENTER, 2, index %2 == 0 ? BaseColor.LIGHT_GRAY:null);
++            taula.addCellaSimple(obteLabelSetmanal(DiaSetmana.DILLUNS, permanenciaProfessorSetmanal.getControlPerDia()), Element.ALIGN_LEFT, 1, Element.ALIGN_CENTER, 2, index %2 == 0 ? BaseColor.LIGHT_GRAY:null);
++            taula.addCellaSimple(obteLabelSetmanal(DiaSetmana.DIMARTS, permanenciaProfessorSetmanal.getControlPerDia()), Element.ALIGN_LEFT, 1, Element.ALIGN_CENTER, 2, index %2 == 0 ? BaseColor.LIGHT_GRAY:null);
++            taula.addCellaSimple(obteLabelSetmanal(DiaSetmana.DIMECRES, permanenciaProfessorSetmanal.getControlPerDia()), Element.ALIGN_LEFT, 1, Element.ALIGN_CENTER, 2, index %2 == 0 ? BaseColor.LIGHT_GRAY:null);
++            taula.addCellaSimple(obteLabelSetmanal(DiaSetmana.DIJOUS, permanenciaProfessorSetmanal.getControlPerDia()), Element.ALIGN_LEFT, 1, Element.ALIGN_CENTER, 2, index %2 == 0 ? BaseColor.LIGHT_GRAY:null);
++            taula.addCellaSimple(obteLabelSetmanal(DiaSetmana.DIVENDRES, permanenciaProfessorSetmanal.getControlPerDia()), Element.ALIGN_LEFT, 1, Element.ALIGN_CENTER, 2, index %2 == 0 ? BaseColor.LIGHT_GRAY:null);
++            index++;
++        }
++
++        document.add(taula);
++    }
++
++    private Phrase obteLabelSetmanal(int diaSetmana, Map<Integer, Tupla<String, Boolean>> horesPermanenciaPerDia) {
++        return obteLabel(horesPermanenciaPerDia.get(diaSetmana).getPrimer(), horesPermanenciaPerDia.get(diaSetmana).getSegon());
++    }
++
++    private Phrase obteLabel(String label) {
++        return new Phrase(label, ConstantsReports.FONT_TEXTE_8);
++    }
++    private Phrase obteLabel(String label, Boolean compleixCriteri) {
++        return new Phrase(label, compleixCriteri ? FONT_TEXTE_VERMELL_8: ConstantsReports.FONT_TEXTE_8);
++    }
++
++    public static final Font FONT_TEXTE_VERMELL_8  = FontFactory.getFont(ConstantsReports.FONT_NAME, BaseFont.CP1252,BaseFont.EMBEDDED, 8f, Font.NORMAL, BaseColor.RED);
++}
++
++
+diff --git a/modules/logica/src/es/caib/xibimp/logica/servei/report/informesCentreDades/HoresPermanenciaProfessorCentreDocument.java b/modules/logica/src/es/caib/xibimp/logica/servei/report/informesCentreDades/HoresPermanenciaProfessorCentreDocument.java
+index ab0710cac17f98dabcb7ad708f1e162e5741a705..ea0c28eeb023493194746af4637741591c5afad6 100644
+--- a/modules/logica/src/es/caib/xibimp/logica/servei/report/informesCentreDades/HoresPermanenciaProfessorCentreDocument.java
++++ b/modules/logica/src/es/caib/xibimp/logica/servei/report/informesCentreDades/HoresPermanenciaProfessorCentreDocument.java
+@@ -14,20 +14,18 @@ import java.io.ByteArrayOutputStream;
+ import java.util.Collection;
+ 
+ public class HoresPermanenciaProfessorCentreDocument extends HoresLectivesProfessorCentreDocument {
+-    private final boolean primaria;
++    private final String titol;
+     private final PdfUtils pdfUtils;
+ 
+-    public HoresPermanenciaProfessorCentreDocument(Collection<HoresLectivesProfessor> dades, Centre centre, String idioma, boolean primaria, ByteArrayOutputStream baosLogoReport) {
++    public HoresPermanenciaProfessorCentreDocument(Collection<HoresLectivesProfessor> dades, Centre centre, String idioma, String titol, ByteArrayOutputStream baosLogoReport) {
+         super(dades, false, centre, idioma, baosLogoReport);
+-        this.primaria = primaria;
++        this.titol = titol;
+         this.pdfUtils = new PdfUtils();
+     }
+ 
+     @Override
+     protected void titolCapceleraHoresLectivesProfessorPDFContent() throws DocumentException {
+-        String titol = primaria ?
+-                "Professorat amb menys de 30 hores de permanència en el centre (Primària)" :
+-                "Professorat amb menys de 25:40 hores de permanència en el centre (Secundària)";
++
+         document.add(pdfUtils.generaTitol(titol, ConstantsReports.FONT_TITOL_12));
+         document.add(pdfUtils.generaTitol("* Itinerants",ConstantsReports.FONT_MOLT_PETITA,Element.ALIGN_RIGHT));
+         document.add(Chunk.NEWLINE);
+diff --git a/modules/logica/src/es/caib/xibimp/logica/servei/report/util/ControlHorariComponent.java b/modules/logica/src/es/caib/xibimp/logica/servei/report/util/ControlHorariComponent.java
+index ba2c984e66d1425d3a6a839143a965dff2e4d96e..1aede2daa724eeca51c06a086687d73122fa26c7 100644
+--- a/modules/logica/src/es/caib/xibimp/logica/servei/report/util/ControlHorariComponent.java
++++ b/modules/logica/src/es/caib/xibimp/logica/servei/report/util/ControlHorariComponent.java
+@@ -1,13 +1,16 @@
+ package es.caib.xibimp.logica.servei.report.util;
+ 
+ import es.caib.xestib.util.Entorn;
++import es.caib.xestib.util.Tupla;
+ import es.caib.xibarb.logica.domini.ensenyament.ArbreEnsenyament;
+ import es.caib.xibhor.logica.domini.horaris.HorariActivitatsProfessor;
+ import es.caib.xibhor.logica.domini.horaris.Sessio;
+ import es.caib.xibhor.logica.domini.horaris.SessioHoraria;
+ import es.caib.xibimp.logica.dto.HoresLectivesProfessor;
++import es.caib.xibimp.logica.dto.ControlHorariProfessorCentreSetmanal;
+ import es.caib.xibper.logica.domini.professor.DestinacioProfessor;
+ import es.caib.xibper.logica.domini.professor.LlocFeina;
++import es.caib.xibtme.logica.domini.persona.NomPersona;
+ import es.caib.xibtme.logica.domini.tipus.DiaSetmana;
+ import es.caib.xibtme.logica.domini.tipus.Idioma;
+ import org.apache.log4j.Logger;
+@@ -22,10 +25,14 @@ public class ControlHorariComponent {
+     private Collection<Sessio> sessionsHoraries;
+     private Map<DiaSetmana, Collection<Integer>> sessionsExistents;
+ 
+-    private static final int TRENTA_HORES_EN_MINUTS = 30 * 60 * 60;
+-    private static final int VINT_I_CINC_HORES_EN_MINUTS = 25 * 60 * 60;
+-    private static final int VINT_I_CINC_HORES_QUARANTA_MINUTS = (25 * 60 * 60) + (40 * 60);
+-    private static final int DEVUIT_SESSIONS = 18;
++    public static final int TRENTA_HORES_EN_MINUTS = 30 * 60 * 60;
++    public static final int VINT_I_CINC_HORES_EN_MINUTS = 25 * 60 * 60;
++    public static final int VINT_I_CINC_HORES_QUARANTA_MINUTS = (25 * 60 * 60) + (40 * 60);
++    public static final int QUATRE_HORES = 4 * 60 * 60;
++    public static final int DEVUIT_SESSIONS = 18;
++    public static final int SESSIONS_MINIMES = 2;
++    public static final int SESSIONS_MAXIMES = 5;
++
+ 
+     private static final Collection<Long> CODIS_SECUNDARIA = Arrays.asList(
+             ArbreEnsenyament.ESO.ETAPA,
+@@ -94,7 +101,7 @@ public class ControlHorariComponent {
+         return new ControlHorariComponent(destinacioProfessor, sessionsHoraries);
+     }
+ 
+-    public Collection<HoresLectivesProfessor> obteHoresPermanenciaProfessorCentre(boolean esPrimaria) {
++    public Collection<HoresLectivesProfessor> obteHoresPermanenciaProfessorCentre(boolean esPrimaria, int tempsLimit) {
+ 
+         Collection<HoresLectivesProfessor> horesLectivesProfessors = new ArrayList<>();
+         logger.log(Entorn.NIVELL_LOG, "[obteHoresPermanenciaProfessorCentre] professor: " + destinacioProfessor.getPersona().getNomComplet() + " sesiones: " + sessionsHoraries.size() + " jornada: " + destinacioProfessor.getJornadaProfessor().getTraduccions().get("ca").getNom() + " centre: " +destinacioProfessor.getLlocFeina().getCentre().getCodi());
+@@ -111,8 +118,8 @@ public class ControlHorariComponent {
+                 final Long codiArbre = sessioHoraria.getHorariMateria().getArbre().getArbre().getId().getCodi();
+                 boolean existeixSessioMateixDiaHora = existeixSessioAmbMateixDiaIHora(sessioHoraria);
+                 logger.log(Entorn.NIVELL_LOG, "[SessioHoraria] Codi: " + sessioHoraria.getCodi() + " Codi arbrePare: " + codiPare +  " Codi arbre: " + codiArbre + " durada: " + sessioHoraria.getDurada());
+-                if ((esPrimaria && CODIS_PRIMARIA_INFANTIL.contains(codiPare) || (!esPrimaria)) && !existeixSessioMateixDiaHora) {
+-                    logger.log(Entorn.NIVELL_LOG, "\tSumando SessioHoraria: " + sessioHoraria.getCodi() + " esprimaria? " + Boolean.toString(CODIS_PRIMARIA_INFANTIL.contains(codiPare)) + " es secundaria: " + Boolean.toString(CODIS_SECUNDARIA.contains(codiPare)));
++                if ((CODIS_PRIMARIA_INFANTIL.contains(codiPare) || (!esPrimaria)) && !existeixSessioMateixDiaHora) {
++                    logger.log(Entorn.NIVELL_LOG, "\tSumando SessioHoraria: " + sessioHoraria.getCodi() + " esprimaria? " + CODIS_PRIMARIA_INFANTIL.contains(codiPare) + " es secundaria: " + CODIS_SECUNDARIA.contains(codiPare));
+                     sumaDuradaSegonsSessions += sessioHoraria.getDurada();
+                     sumaSessions++;
+                     esProfessorPrimaria |= CODIS_PRIMARIA_INFANTIL.contains(codiPare);
+@@ -134,18 +141,21 @@ public class ControlHorariComponent {
+         logger.log(Entorn.NIVELL_LOG, "Durada segundos sessions: " + Sessio.horaATxt(sumaDuradaSegonsSessions));
+         logger.log(Entorn.NIVELL_LOG, "Durada segundos activitat: " + Sessio.horaATxt(sumaDuradaSegonsActivitat));
+         int duradaTotalSessions = sumaDuradaSegonsSessions + sumaDuradaSegonsActivitat;
+-        int tempsLimit = esPrimaria ? TRENTA_HORES_EN_MINUTS : VINT_I_CINC_HORES_QUARANTA_MINUTS;
+         if (cumpleixTempsPermanencia(duradaTotalSessions, tempsLimit) &&
+                 (esProfessorPrimariaValid(esPrimaria, esProfessorPrimaria) || !esPrimaria)) {
+-            String jornada = destinacioProfessor.getJornadaProfessor().getTraduccions().get(Idioma.IDIOMA_APLICACIO).getNom();
+-            String llinatge1 = destinacioProfessor.getProfessor().getPersona().getNom().getLlinatge1();
+-            String llinatge2 = destinacioProfessor.getProfessor().getPersona().getNom().getLlinatge2();
+-            String nom = destinacioProfessor.getProfessor().getPersona().getNom().getNom() + (LlocFeina.NO_ITINERANT.equals(destinacioProfessor.getLlocFeina().getItinerant()) ? "" : " *");
+-            horesLectivesProfessors.add(new HoresLectivesProfessor(llinatge1, llinatge2, nom, numeroSessions, Sessio.horaATxt(duradaTotalSessions), jornada));
++            horesLectivesProfessors.add( populateHoresLectivesProfessor(numeroSessions, duradaTotalSessions));
+         }
+         return horesLectivesProfessors;
+     }
+ 
++    private HoresLectivesProfessor populateHoresLectivesProfessor(Long numeroSessions, int duradaTotalSessions) {
++        String jornada = destinacioProfessor.getJornadaProfessor().getTraduccions().get(Idioma.IDIOMA_APLICACIO).getNom();
++        String llinatge1 = destinacioProfessor.getProfessor().getPersona().getNom().getLlinatge1();
++        String llinatge2 = destinacioProfessor.getProfessor().getPersona().getNom().getLlinatge2();
++        String nom = destinacioProfessor.getProfessor().getPersona().getNom().getNom() + (LlocFeina.NO_ITINERANT.equals(destinacioProfessor.getLlocFeina().getItinerant()) ? "" : " *");
++        return new HoresLectivesProfessor(llinatge1, llinatge2, nom, numeroSessions, Sessio.horaATxt(duradaTotalSessions), jornada);
++    }
++
+     private boolean esProfessorPrimariaValid(boolean esPrimaria, boolean esProfessorPrimaria) {
+         return esPrimaria && esProfessorPrimaria;
+     }
+@@ -197,11 +207,7 @@ public class ControlHorariComponent {
+         logger.log(Entorn.NIVELL_LOG, "Durada segundos sessions: " + Sessio.horaATxt(sumaDuradaSegonsSessions));
+         int duradaTotalSessions = sumaDuradaSegonsSessions;
+         if (duradaTotalSessions > 0) {
+-            String jornada = destinacioProfessor.getJornadaProfessor().getTraduccions().get(Idioma.IDIOMA_APLICACIO).getNom();
+-            String llinatge1 = destinacioProfessor.getProfessor().getPersona().getNom().getLlinatge1();
+-            String llinatge2 = destinacioProfessor.getProfessor().getPersona().getNom().getLlinatge2();
+-            String nom = destinacioProfessor.getProfessor().getPersona().getNom().getNom() + (LlocFeina.NO_ITINERANT.equals(destinacioProfessor.getLlocFeina().getItinerant()) ? "" : " *");
+-            horesLectivesProfessors.add(new HoresLectivesProfessor(llinatge1, llinatge2, nom, numeroSessions, Sessio.horaATxt(duradaTotalSessions), jornada));
++            horesLectivesProfessors.add(populateHoresLectivesProfessor(numeroSessions, duradaTotalSessions));
+         }
+         return horesLectivesProfessors;
+     }
+@@ -222,9 +228,8 @@ public class ControlHorariComponent {
+                 final Long codiPare = sessioHoraria.getHorariMateria().getArbre().getArbre().getCodiPare();
+                 final Long codiArbre = sessioHoraria.getHorariMateria().getArbre().getArbre().getId().getCodi();
+                 logger.log(Entorn.NIVELL_LOG, "[SessioHoraria] Codi: " + sessioHoraria.getCodi() + " Codi arbrePare: " + codiPare +  " Codi arbre: " + codiArbre + " durada: " + sessioHoraria.getDurada());
+-                if ((esPrimaria && CODIS_PRIMARIA_INFANTIL.contains(codiPare) || !esPrimaria) &&
+-                        !existeixSessioAmbMateixDiaIHora(sessioHoraria)) {
+-                    logger.log(Entorn.NIVELL_LOG, "\tSumando SessioHoraria: " + sessioHoraria.getCodi() + " esprimaria? " + Boolean.toString(CODIS_PRIMARIA_INFANTIL.contains(codiPare)) + " es secundaria: " + Boolean.toString(CODIS_SECUNDARIA.contains(codiPare)));
++                if ((CODIS_PRIMARIA_INFANTIL.contains(codiPare) || !esPrimaria) && !existeixSessioAmbMateixDiaIHora(sessioHoraria)) {
++                    logger.log(Entorn.NIVELL_LOG, "\tSumando SessioHoraria: " + sessioHoraria.getCodi() + " esprimaria? " + CODIS_PRIMARIA_INFANTIL.contains(codiPare) + " es secundaria: " + CODIS_SECUNDARIA.contains(codiPare));
+                     sumaDuradaSegonsSessions += sessioHoraria.getDurada();
+                     sumaSessions++;
+                     esProfessorPrimaria |= CODIS_PRIMARIA_INFANTIL.contains(codiPare);
+@@ -252,11 +257,7 @@ public class ControlHorariComponent {
+                 (esProfessorPrimariaValid(esPrimaria, esProfessorPrimaria) && duradaTotalSessions < VINT_I_CINC_HORES_EN_MINUTS) ||
+                 (!esPrimaria && numeroSessions < DEVUIT_SESSIONS)
+         )) {
+-            String jornada = destinacioProfessor.getJornadaProfessor().getTraduccions().get(Idioma.IDIOMA_APLICACIO).getNom();
+-            String llinatge1 = destinacioProfessor.getProfessor().getPersona().getNom().getLlinatge1();
+-            String llinatge2 = destinacioProfessor.getProfessor().getPersona().getNom().getLlinatge2();
+-            String nom = destinacioProfessor.getProfessor().getPersona().getNom().getNom() + (LlocFeina.NO_ITINERANT.equals(destinacioProfessor.getLlocFeina().getItinerant()) ? "" : " *");
+-            horesLectivesProfessors.add(new HoresLectivesProfessor(llinatge1, llinatge2, nom, numeroSessions, Sessio.horaATxt(duradaTotalSessions), jornada));
++            horesLectivesProfessors.add(populateHoresLectivesProfessor(numeroSessions, duradaTotalSessions));
+         }
+         return horesLectivesProfessors;
+     }
+@@ -285,16 +286,11 @@ public class ControlHorariComponent {
+         logger.log(Entorn.NIVELL_LOG, "Durada segundos sessions: " + Sessio.horaATxt(sumaDuradaSegonsSessions));
+         int duradaTotalSessions = sumaDuradaSegonsSessions;
+         if (sumaDuradaSegonsSessions > 0 && numeroSessions > numeroMaxSessions) {
+-            String jornada = destinacioProfessor.getJornadaProfessor().getTraduccions().get(Idioma.IDIOMA_APLICACIO).getNom();
+-            String llinatge1 = destinacioProfessor.getProfessor().getPersona().getNom().getLlinatge1();
+-            String llinatge2 = destinacioProfessor.getProfessor().getPersona().getNom().getLlinatge2();
+-            String nom = destinacioProfessor.getProfessor().getPersona().getNom().getNom() + (LlocFeina.NO_ITINERANT.equals(destinacioProfessor.getLlocFeina().getItinerant()) ? "" : " *");
+-            horesLectivesProfessors.add(new HoresLectivesProfessor(llinatge1, llinatge2, nom, numeroSessions, Sessio.horaATxt(duradaTotalSessions), jornada));
++            horesLectivesProfessors.add(populateHoresLectivesProfessor(numeroSessions, duradaTotalSessions));
+         }
+         return horesLectivesProfessors;
+     }
+ 
+-
+     public static boolean esEstudisSecundari(boolean primaria, Long codiEtapa) {
+         return !primaria && ControlHorariComponent.CODIS_SECUNDARIA.contains(codiEtapa);
+     }
+@@ -303,4 +299,110 @@ public class ControlHorariComponent {
+         return primaria && ControlHorariComponent.CODIS_PRIMARIA_INFANTIL.contains(codiEtapa);
+     }
+ 
++    public Collection<ControlHorariProfessorCentreSetmanal> obteHoresPermanenciaProfessorCentreControlSetmanal(int tempsLimit) {
++        Collection<ControlHorariProfessorCentreSetmanal> horesPermanenciaProfessorsSetmanal = new ArrayList<>();
++        logger.log(Entorn.NIVELL_LOG, "[obteHoresPermanenciaProfessorCentreControlSetmanal] professor: " + destinacioProfessor.getPersona().getNomComplet() + " sesiones: " + sessionsHoraries.size() + " jornada: " + destinacioProfessor.getJornadaProfessor().getTraduccions().get("ca").getNom() + " centre: " +destinacioProfessor.getLlocFeina().getCentre().getCodi());
++        Map<Integer, Integer> horesPermanenciaPerDia = initzialitzaMapaDies();
++        boolean esVisualitza = false;
++        for (Sessio sessio: sessionsHoraries) {
++            if (sessio instanceof SessioHoraria) {
++                SessioHoraria sessioHoraria = (SessioHoraria) sessio;
++                final Long codiPare = sessioHoraria.getHorariMateria().getArbre().getArbre().getCodiPare();
++                printInfoSessio(sessioHoraria, codiPare);
++                if (!CODIS_PRIMARIA_INFANTIL.contains(codiPare) && !existeixSessioAmbMateixDiaIHora(sessioHoraria)) {
++                    esVisualitza = true;
++                    horesPermanenciaPerDia.put(sessio.getDia().getCodi(), horesPermanenciaPerDia.get(sessio.getDia().getCodi()) + sessioHoraria.getDurada());
++                }
++            } else if (sessio instanceof HorariActivitatsProfessor) {
++                HorariActivitatsProfessor horariActivitatsProfessor = (HorariActivitatsProfessor) sessio;
++                horesPermanenciaPerDia.put(sessio.getDia().getCodi(), horesPermanenciaPerDia.get(sessio.getDia().getCodi()) + horariActivitatsProfessor.getDurada());
++                    logger.log(Entorn.NIVELL_LOG, "[HorariActivitatsProfessor] Tipus activitat: " +
++                            horariActivitatsProfessor.getActivitatProfessor().getTipusActivitat().getCodi() + "-" + horariActivitatsProfessor.getActivitatProfessor().getTraduccions().get("ca").getNom() + " durada: " + horariActivitatsProfessor.getDurada());
++            }
++        }
++
++        if (esVisualitza) {
++            horesPermanenciaProfessorsSetmanal.add(populateHoresPermanenciaProfessoratSetmanal(horesPermanenciaPerDia, tempsLimit));
++        }
++        return horesPermanenciaProfessorsSetmanal;
++    }
++
++    private void printInfoSessio(SessioHoraria sessioHoraria, Long codiPare) {
++        final Long codiArbre = sessioHoraria.getHorariMateria().getArbre().getArbre().getId().getCodi();
++        logger.log(Entorn.NIVELL_LOG, "[SessioHoraria] Codi: " + sessioHoraria.getCodi() + " Codi arbrePare: " + codiPare +  " Codi arbre: " + codiArbre + "Dia: " + sessioHoraria.getDia().getCodi() + " horariMateria: " + sessioHoraria.getHorariMateria().getCodi() + " durada: " + sessioHoraria.getDurada());
++        logger.log(Entorn.NIVELL_LOG, "\tSECUNDARIA - Sumando SessioHoraria: " + sessioHoraria.getCodi() + " esprimaria? " + CODIS_PRIMARIA_INFANTIL.contains(codiPare) + " es secundaria: " + CODIS_SECUNDARIA.contains(codiPare));
++        logger.log(Entorn.NIVELL_LOG, "\tDia: " + sessioHoraria.getDia().getCodi() + " Durada: " + sessioHoraria.getDurada());
++    }
++
++    private ControlHorariProfessorCentreSetmanal populateHoresPermanenciaProfessoratSetmanal(Map<Integer, Integer> horesPermanenciaPerDia, int tempsLimit){
++        Map<Integer, Tupla<String, Boolean>> horesPermanenciaSetmanal = new HashMap<>();
++        for (Map.Entry<Integer, Integer> data: horesPermanenciaPerDia.entrySet()) {
++            horesPermanenciaSetmanal.put(data.getKey(), new Tupla<>(Sessio.horaATxt(data.getValue()), data.getValue() < tempsLimit));
++        }
++        return ControlHorariProfessorCentreSetmanal.newInstance(
++                obteNomPersona(),
++                destinacioProfessor.getJornadaProfessor().getTraduccions().get(Idioma.IDIOMA_APLICACIO).getNom(),
++                horesPermanenciaSetmanal);
++    }
++
++    private ControlHorariProfessorCentreSetmanal populateSessionsLectivesProfessoratSetmanal(Map<Integer, Integer> horesPermanenciaPerDia, int limitInferior, int limitSuperior){
++        Map<Integer, Tupla<String, Boolean>> horesPermanenciaSetmanal = new HashMap<>();
++        for (Map.Entry<Integer, Integer> data: horesPermanenciaPerDia.entrySet()) {
++            horesPermanenciaSetmanal.put(data.getKey(), new Tupla<>(data.getValue().toString(), (data.getValue() < limitInferior || data.getValue() > limitSuperior)));
++        }
++
++        return ControlHorariProfessorCentreSetmanal.newInstance(
++                obteNomPersona(),
++                destinacioProfessor.getJornadaProfessor().getTraduccions().get(Idioma.IDIOMA_APLICACIO).getNom(),
++                horesPermanenciaSetmanal);
++    }
++
++    private NomPersona obteNomPersona() {
++        return new NomPersona(
++                destinacioProfessor.getProfessor().getPersona().getNom().getNom(),
++                destinacioProfessor.getProfessor().getPersona().getNom().getLlinatge1(),
++                destinacioProfessor.getProfessor().getPersona().getNom().getLlinatge2());
++    }
++
++    public Collection<ControlHorariProfessorCentreSetmanal> obteSessionsLectivesProfessorCentreControlSetmanal(int limitInferior, int limitSuperior) {
++        Collection<ControlHorariProfessorCentreSetmanal> horesPermanenciaProfessorsSetmanal = new ArrayList<>();
++        logger.log(Entorn.NIVELL_LOG, "[obteSessionsLectivesProfessorCentreControlSetmanal] professor: " + destinacioProfessor.getPersona().getNomComplet() + " sesiones: " + sessionsHoraries.size() + " jornada: " + destinacioProfessor.getJornadaProfessor().getTraduccions().get("ca").getNom() + " centre: " +destinacioProfessor.getLlocFeina().getCentre().getCodi());
++
++        Map<Integer, Integer> horesPermanenciaPerDia = initzialitzaMapaDies();
++        boolean esVisualitza = false;
++        for (Sessio sessio: sessionsHoraries) {
++            if (sessio instanceof SessioHoraria) {
++                SessioHoraria sessioHoraria = (SessioHoraria) sessio;
++                final Long codiPare = sessioHoraria.getHorariMateria().getArbre().getArbre().getCodiPare();
++                printInfoSessio(sessioHoraria, codiPare);
++                if (!CODIS_PRIMARIA_INFANTIL.contains(codiPare) && !existeixSessioAmbMateixDiaIHora(sessioHoraria)) {
++                    esVisualitza = true;
++                    horesPermanenciaPerDia.put(sessio.getDia().getCodi(), horesPermanenciaPerDia.get(sessio.getDia().getCodi()) + 1);
++                }
++            } else if (sessio instanceof HorariActivitatsProfessor) {
++                HorariActivitatsProfessor horariActivitatsProfessor = (HorariActivitatsProfessor) sessio;
++                if (horariActivitatsProfessor.getActivitatProfessor().esLectiva()) {
++                    horesPermanenciaPerDia.put(sessio.getDia().getCodi(), horesPermanenciaPerDia.get(sessio.getDia().getCodi()) + 1);
++                    logger.log(Entorn.NIVELL_LOG, "[HorariActivitatsProfessor] Tipus activitat: " +
++                            horariActivitatsProfessor.getActivitatProfessor().getTipusActivitat().getCodi() + "-" + horariActivitatsProfessor.getActivitatProfessor().getTraduccions().get("ca").getNom() + " durada: " + horariActivitatsProfessor.getDurada());
++                }
++            }
++        }
++
++        if (esVisualitza) {
++            horesPermanenciaProfessorsSetmanal.add(populateSessionsLectivesProfessoratSetmanal(horesPermanenciaPerDia, limitInferior, limitSuperior));
++        }
++        return horesPermanenciaProfessorsSetmanal;
++    }
++
++    private java.util.Map<java.lang.Integer, java.lang.Integer> initzialitzaMapaDies() {
++        Map<Integer, Integer> horesPermanenciaPerDia = new HashMap<>();
++        horesPermanenciaPerDia.put(DiaSetmana.DILLUNS, 0);
++        horesPermanenciaPerDia.put(DiaSetmana.DIMARTS, 0);
++        horesPermanenciaPerDia.put(DiaSetmana.DIMECRES, 0);
++        horesPermanenciaPerDia.put(DiaSetmana.DIJOUS, 0);
++        horesPermanenciaPerDia.put(DiaSetmana.DIVENDRES, 0);
++        return horesPermanenciaPerDia;
++    }
++
+ }
+diff --git a/modules/www/src/es/caib/xestib/www/controladors/reports/ControladorReportsCentre.java b/modules/www/src/es/caib/xestib/www/controladors/reports/ControladorReportsCentre.java
+index 31e4f062fa7e2b502168f95b4dbfd4b551200430..18e04fe92037e932c75064ccf0fd61d3ba6ff09e 100644
+--- a/modules/www/src/es/caib/xestib/www/controladors/reports/ControladorReportsCentre.java
++++ b/modules/www/src/es/caib/xestib/www/controladors/reports/ControladorReportsCentre.java
+@@ -42,7 +42,6 @@ import es.caib.xibcen.logica.domini.servei.EmpresaServeiCentre;
+ import es.caib.xibcen.logica.domini.servei.TipusEmpresaServei;
+ import es.caib.xibcen.logica.servei.CentreService;
+ import es.caib.xibcen.logica.servei.TransportService;
+-import es.caib.xibecc.logica.domini.concert.json.ResolucioConcertJson;
+ import es.caib.xibhor.logica.domini.horaris.*;
+ import es.caib.xibhor.logica.servei.HorariService;
+ import es.caib.xibimp.logica.domini.DocumentCentreAny;
+@@ -451,8 +450,8 @@ public class ControladorReportsCentre {
+     }
+ 
+     @RequestMapping(value="ratioAlumnesProfessorSessio.pdf", method = RequestMethod.POST)
+-    public ModelAndView obtenirRatioAlumnesProfessorSessio(HttpSession sessio){
+-        String codiCentre = FiltreConfiguracio.obteCentre(sessio).getCodi();
++    public ModelAndView obtenirRatioAlumnesProfessorSessio(HttpSession sessio, @RequestParam (required = false) String codiCentre){
++        if (Strings.isNullOrEmpty(codiCentre)) codiCentre = FiltreConfiguracio.obteCentre(sessio).getCodi();
+         CursAcademic any = FiltreConfiguracio.obteCurs(sessio);
+         return VisorPdf.creaVista(informesService.obteRatioAlumnesProfessorSessio(codiCentre,any, Idioma.IDIOMA_APLICACIO));
+     }
+@@ -857,31 +856,59 @@ public class ControladorReportsCentre {
+ 
+ 
+     @RequestMapping(value="horesMesHoresLectives.pdf", method = RequestMethod.POST)
+-    public ModelAndView obtenirHoresMesHoresLectives(HttpSession session){
+-        String codiCentre= FiltreConfiguracio.obteCentre(session).getCodi();
+-        CursAcademic any =FiltreConfiguracio.obteCurs(session);
++    public ModelAndView obtenirHoresMesHoresLectives(HttpSession session,
++                                                     @RequestParam (required = false) String codiCentre,
++                                                     @RequestParam (required = false) CursAcademic any) {
++        if (Strings.isNullOrEmpty(codiCentre)) codiCentre = FiltreConfiguracio.obteCentre(session).getCodi();
++        if (any == null) any = FiltreConfiguracio.obteCurs(session);
+         int numeroSessions = 21;
+         return VisorPdf.creaVista(informesService.llistaProfessorsMesXSessions(codiCentre, any, Idioma.IDIOMA_APLICACIO, numeroSessions));
+     }
+ 
+     @RequestMapping(value="horesPermanenciaProfessorCentre.pdf", method = RequestMethod.POST)
+-    public ModelAndView obtenirHoresPermanenciaProfessorCentre(HttpSession session, @RequestParam (required = false) String primaria){
+-        String codiCentre= FiltreConfiguracio.obteCentre(session).getCodi();
+-        CursAcademic any =FiltreConfiguracio.obteCurs(session);
++    public ModelAndView obtenirHoresPermanenciaProfessorCentre(HttpSession session,
++                                                               @RequestParam (required = false) String primaria,
++                                                               @RequestParam (required = false) String codiCentre,
++                                                               @RequestParam (required = false) CursAcademic any) {
++        if (Strings.isNullOrEmpty(codiCentre)) codiCentre = FiltreConfiguracio.obteCentre(session).getCodi();
++        if (any == null) any = FiltreConfiguracio.obteCurs(session);
+         return VisorPdf.creaVista(informesService.llistaHoresPermanenciaProfessorCentre(codiCentre,any, Idioma.IDIOMA_APLICACIO,"1".equals(primaria)) );
+     }
+ 
++    @RequestMapping(value="controlSetmanalHoresPermanenciaProfessorCentre.pdf", method = RequestMethod.POST)
++    public ModelAndView controlSetmanalHoresPermanenciaProfessorCentre(HttpSession session,
++                                                                   @RequestParam (required = false) String codiCentre,
++                                                                   @RequestParam (required = false) CursAcademic any){
++        if (Strings.isNullOrEmpty(codiCentre)) codiCentre = FiltreConfiguracio.obteCentre(session).getCodi();
++        if (any == null) any = FiltreConfiguracio.obteCurs(session);
++        return VisorPdf.creaVista(informesService.llistaHoresPermanenciaProfessorCentreControlSetmanal(codiCentre, any, Idioma.IDIOMA_APLICACIO));
++    }
++
++    @RequestMapping(value="controlSetmanalPeriodeLectiuProfessorCentre.pdf", method = RequestMethod.POST)
++    public ModelAndView controlSetmanalPeriodeLectiuProfessorCentre(HttpSession session,
++                                                                   @RequestParam (required = false) String codiCentre,
++                                                                   @RequestParam (required = false) CursAcademic any){
++        if (Strings.isNullOrEmpty(codiCentre)) codiCentre = FiltreConfiguracio.obteCentre(session).getCodi();
++        if (any == null) any = FiltreConfiguracio.obteCurs(session);
++        return VisorPdf.creaVista(informesService.llistaPeriodesLectiusProfessorCentreControlSetmanal(codiCentre, any, Idioma.IDIOMA_APLICACIO));
++    }
++
+     @RequestMapping(value="horesLectivesProfessor.pdf", method = RequestMethod.POST)
+-    public ModelAndView obtenirHoresLectivesProfessor(HttpSession session, @RequestParam (required = false) String primaria){
+-        String codiCentre= FiltreConfiguracio.obteCentre(session).getCodi();
+-        CursAcademic any =FiltreConfiguracio.obteCurs(session);
++    public ModelAndView obtenirHoresLectivesProfessor(HttpSession session,
++                                                      @RequestParam (required = false) String primaria,
++                                                      @RequestParam (required = false) String codiCentre,
++                                                      @RequestParam (required = false) CursAcademic any){
++        if (Strings.isNullOrEmpty(codiCentre)) codiCentre = FiltreConfiguracio.obteCentre(session).getCodi();
++        if (any == null) any = FiltreConfiguracio.obteCurs(session);
+         return VisorPdf.creaVista(informesService.llistaHoresLectives(codiCentre,any, Idioma.IDIOMA_APLICACIO,"1".equals(primaria)) );
+     }
+ 
+     @RequestMapping(value="horesDocenciaDirectaProfessor.pdf", method = RequestMethod.POST)
+-    public ModelAndView obtenirHoresDocenciaDirectaProfessor(HttpSession session){
+-        String codiCentre= FiltreConfiguracio.obteCentre(session).getCodi();
+-        CursAcademic any =FiltreConfiguracio.obteCurs(session);
++    public ModelAndView obtenirHoresDocenciaDirectaProfessor(HttpSession session,
++                                                             @RequestParam (required = false) String codiCentre,
++                                                             @RequestParam (required = false) CursAcademic any){
++        if (Strings.isNullOrEmpty(codiCentre)) codiCentre = FiltreConfiguracio.obteCentre(session).getCodi();
++        if (any == null) any = FiltreConfiguracio.obteCurs(session);
+         return VisorPdf.creaVista(informesService.llistaHoresDocenciaDirectaProfessor(codiCentre,any, Idioma.IDIOMA_APLICACIO) );
+     }
+ 
+@@ -912,16 +939,21 @@ public class ControladorReportsCentre {
+     }
+ 
+     @RequestMapping(value="diferenciesHoresImpartides.pdf", method = RequestMethod.POST)
+-    public ModelAndView obtenirDiferenciesHoresImpartides(HttpSession session, @RequestParam (required = false) String primaria){
+-        String codiCentre= FiltreConfiguracio.obteCentre(session).getCodi();
+-        CursAcademic any =FiltreConfiguracio.obteCurs(session);
++    public ModelAndView obtenirDiferenciesHoresImpartides(HttpSession session,
++                                                          @RequestParam (required = false) String primaria,
++                                                          @RequestParam (required = false) String codiCentre,
++                                                          @RequestParam (required = false) CursAcademic any){
++        if (Strings.isNullOrEmpty(codiCentre)) codiCentre = FiltreConfiguracio.obteCentre(session).getCodi();
++        if (any == null) any = FiltreConfiguracio.obteCurs(session);
+         return VisorPdf.creaVista(informesService.llistaDiferenciesHoresImpartides(codiCentre,any, Idioma.IDIOMA_APLICACIO,"1".equals(primaria)) );
+     }
+ 
+     @RequestMapping(value="desdoblamentMateria.pdf", method = RequestMethod.POST)
+-    public ModelAndView obtenirDesdoblamentMateria(HttpSession session){
+-        String codiCentre= FiltreConfiguracio.obteCentre(session).getCodi();
+-        CursAcademic any =FiltreConfiguracio.obteCurs(session);
++    public ModelAndView obtenirDesdoblamentMateria(HttpSession session,
++                                                   @RequestParam (required = false) String codiCentre,
++                                                   @RequestParam (required = false) CursAcademic any){
++        if (Strings.isNullOrEmpty(codiCentre)) codiCentre = FiltreConfiguracio.obteCentre(session).getCodi();
++        if (any == null) any = FiltreConfiguracio.obteCurs(session);
+         return VisorPdf.creaVista(informesService.llistaDesdoblamentsMateries(codiCentre, any, Idioma.IDIOMA_APLICACIO));
+     }
+ 
+@@ -1001,9 +1033,11 @@ public class ControladorReportsCentre {
+     }
+ 
+     @RequestMapping(value="alumnesMateriaProfessor.pdf", method = RequestMethod.POST)
+-    public ModelAndView obtenirAlumnesMateriaProfessor(HttpSession session){
+-        String codiCentre= FiltreConfiguracio.obteCentre(session).getCodi();
+-        CursAcademic any =FiltreConfiguracio.obteCurs(session);
++    public ModelAndView obtenirAlumnesMateriaProfessor(HttpSession session,
++                                                       @RequestParam (required = false) String codiCentre,
++                                                       @RequestParam (required = false) CursAcademic any){
++        if (Strings.isNullOrEmpty(codiCentre)) codiCentre = FiltreConfiguracio.obteCentre(session).getCodi();
++        if (any == null) any = FiltreConfiguracio.obteCurs(session);
+         return VisorPdf.creaVista(informesService.llistaAlumnesMateriaProfessor(codiCentre, any, Idioma.IDIOMA_APLICACIO));
+     }
+ 
+@@ -1050,9 +1084,11 @@ public class ControladorReportsCentre {
+     }
+ 
+     @RequestMapping(value="alternanciaHoraria.pdf", method = RequestMethod.POST)
+-    public ModelAndView obtenirAlternanciaHoraria(HttpSession session){
+-        String codiCentre= FiltreConfiguracio.obteCentre(session).getCodi();
+-        CursAcademic any =FiltreConfiguracio.obteCurs(session);
++    public ModelAndView obtenirAlternanciaHoraria(HttpSession session,
++                                                  @RequestParam (required = false) String codiCentre,
++                                                  @RequestParam (required = false) CursAcademic any){
++        if (Strings.isNullOrEmpty(codiCentre)) codiCentre = FiltreConfiguracio.obteCentre(session).getCodi();
++        if (any == null) any = FiltreConfiguracio.obteCurs(session);
+         return VisorPdf.creaVista(informesService.llistaAlternanciaHoraria(codiCentre, any, Idioma.IDIOMA_APLICACIO));
+     }
+ 
+@@ -1723,4 +1759,9 @@ public class ControladorReportsCentre {
+         return excel.creaVista();
+     }
+ 
++    @RequestMapping(value="llistaControlHorarisProfessoratInspeccio", method = RequestMethod.GET)
++    public String llistaControlHorarisProfessoratInspeccio(){
++        return "llistes/centre/llistaControlHorarisProfessoratInspeccio_BTS.jsp";
++    }
++
+ }
+diff --git a/modules/www/xestib.war/WEB-INF/classes/xibimp_missatges.properties b/modules/www/xestib.war/WEB-INF/classes/xibimp_missatges.properties
+index b3ee11d3fd44e9488f6745f2b69748255ae5fa83..0274f087080641315430d1a6c451934df334d093 100644
+--- a/modules/www/xestib.war/WEB-INF/classes/xibimp_missatges.properties
++++ b/modules/www/xestib.war/WEB-INF/classes/xibimp_missatges.properties
+@@ -2370,5 +2370,8 @@ comparativaAturades=Comparativa aturades Conselleria vs Centre
+ erradaCarregantTipusCentres=S'ha produ\u00EFt una errada carregant els tipus de centres
+ erradaCarregantCentres=S'ha produ\u00EFt una errada carregant els centres
+ oblVehicleOTipusCentre=Ha de triar un vehicle o un tipus de centre.
++label=Selecciona
++controlPermanenciaSecundaria=Control setmanal perman\u00E8ncia professorat secund\u00E0ria (menor de 4 hores)
++controlPeriodesLectiusSecundaria=Control setmanal per\u00EDodes lectius professorat secund\u00E0ria 
+ # final fitxer
+ 
+diff --git a/modules/www/xestib.war/WEB-INF/classes/xibimp_missatges_ca.properties b/modules/www/xestib.war/WEB-INF/classes/xibimp_missatges_ca.properties
+index 0ee38b16a3683e4d23d669a66dc9ba3312a6d4b4..7e1a9a3db124fd1245001ef53b39be771abbb3ed 100644
+--- a/modules/www/xestib.war/WEB-INF/classes/xibimp_missatges_ca.properties
++++ b/modules/www/xestib.war/WEB-INF/classes/xibimp_missatges_ca.properties
+@@ -2322,5 +2322,8 @@ comparativaAturades=Comparativa aturades Conselleria vs Centre
+ erradaCarregantTipusCentres=S'ha produ\u00EFt una errada carregant els tipus de centres
+ erradaCarregantCentres=S'ha produ\u00EFt una errada carregant els centres
+ oblVehicleOTipusCentre=Ha de triar un vehicle o un tipus de centre.
++label=Selecciona
++controlPermanenciaSecundaria=Control setmanal perman\u00E8ncia professorat secund\u00E0ria (menor de 4 hores)
++controlPeriodesLectiusSecundaria=Control setmanal per\u00EDodes lectius professorat secund\u00E0ria
+ # final fitxer
+ 
+diff --git a/modules/www/xestib.war/WEB-INF/classes/xibimp_missatges_es.properties b/modules/www/xestib.war/WEB-INF/classes/xibimp_missatges_es.properties
+index 4f25d3c8695c1bb10a29e9122b8a4ca051d0aac4..e1e669234383673ef476dbf546c6d9862db08e9c 100644
+--- a/modules/www/xestib.war/WEB-INF/classes/xibimp_missatges_es.properties
++++ b/modules/www/xestib.war/WEB-INF/classes/xibimp_missatges_es.properties
+@@ -2356,4 +2356,7 @@ comparativaAturades=Comparativa paradas Conseller\u00EDa vs Centro
+ erradaCarregantTipusCentres=Se ha producido un error cargando los tipos de centros
+ erradaCarregantCentres=Se ha producido un error cargando los centros
+ oblVehicleOTipusCentre=Debe elegir un veh\u00EDculo o un tipo de centro.
++label=Selecciona
++controlPermanenciaSecundaria=Control semanal permanencia profesorado secundaria (menor de 4 horas)
++controlPeriodesLectiusSecundaria=Control semanal periodos lectivos profesorado secundaria
+ # final fitxer
+diff --git a/modules/www/xestib.war/WEB-INF/views/llistes/alumnat/llistatFaltesSecundariaAltres_BTS.jsp b/modules/www/xestib.war/WEB-INF/views/llistes/alumnat/llistatFaltesSecundariaAltres_BTS.jsp
+index f25cd11e160b79728fd6866fe95bbb7e363e692b..6deae1d4d843ff8b4089bae8c8b53e784ca1485e 100644
+--- a/modules/www/xestib.war/WEB-INF/views/llistes/alumnat/llistatFaltesSecundariaAltres_BTS.jsp
++++ b/modules/www/xestib.war/WEB-INF/views/llistes/alumnat/llistatFaltesSecundariaAltres_BTS.jsp
+@@ -392,19 +392,19 @@
+                                 <div class="row row_dashed_bottom">
+                                     <div class="form-group col-xs-6 col-sm-6 col-md-3 col-lg-3 seleccioTipus">
+                                         <div>
+-                                            <c:if test="${informeActiu != 'S'}">
++                                        <c:if test="${informeActiu != 'S'}">
+                                             <label><fmt:message bundle="${etiquetes}" key="percentatgeAbsentisme"/> deshabilitat temporalment.</label>
+                                             <label for="idPercentatgeAbsentismeCiclesPerMateries" style="display: none;">
+                                                 <input type="radio" id="idPercentatgeAbsentismeCiclesPerMateries" name="tipus_inf" value="recompte"/>
+                                                 <fmt:message bundle="${etiquetes}" key="percentatgeAbsentisme"/>
+                                             </label>
+-                                            </c:if>
+-                                            <c:if test="${informeActiu == 'S'}">
++                                        </c:if>
++                                        <c:if test="${informeActiu == 'S'}">
+                                             <label for="idPercentatgeAbsentismeCiclesPerMateries">
+                                                 <input type="radio" id="idPercentatgeAbsentismeCiclesPerMateries" name="tipus_inf" value="recompte"/>
+                                                 <fmt:message bundle="${etiquetes}" key="percentatgeAbsentisme"/>
+                                             </label>
+-                                            </c:if>
++                                        </c:if>
+                                         </div>
+                                         <div id="idContenidorPercentatgeAbsentismeCiclesPerMateries">
+                                             <div id="idContenidorDates" >
+diff --git a/modules/www/xestib.war/WEB-INF/views/llistes/centre/llistaControlHorarisProfessoratInspeccio_BTS.jsp b/modules/www/xestib.war/WEB-INF/views/llistes/centre/llistaControlHorarisProfessoratInspeccio_BTS.jsp
+new file mode 100644
+index 0000000000000000000000000000000000000000..4213a783a034e720736ebf9a31d5f94bdeb60595
+--- /dev/null
++++ b/modules/www/xestib.war/WEB-INF/views/llistes/centre/llistaControlHorarisProfessoratInspeccio_BTS.jsp
+@@ -0,0 +1,166 @@
++<!DOCTYPE html>
++<%@ taglib prefix="c" uri="http://java.sun.com/jsp/jstl/core" %>
++<%@ taglib prefix="fmt" uri="http://java.sun.com/jsp/jstl/fmt"  %>
++<%@ page contentType="text/html; charset=UTF-8" %>
++
++<fmt:setBundle basename="xibimp_missatges" var="missatge" />
++
++<c:if test="${base != 'true'}">
++  <jsp:include page="/WEB-INF/views/boostrapDevelop.jsp"/>
++  <script type="text/javascript" src="<c:url value="/js/llistes/llistaControlHorarisProfessoratInspeccio.js"/>"></script>
++  <script type="text/javascript" src="<c:url value="/js/components/centresComboComponent.js"/>"></script>
++</c:if>
++
++<script type="text/javascript" src="<c:url value="/traduccio"/>/${sessionScope.locale}/xibimp_missatges"></script>
++<title>Control d'Horaris Professorat Inspecció</title>
++
++<section class="content contenidorPrincipal" <c:if test="${base != 'true'}"> ng-app="ControlHorarisProfessoratInspeccio" </c:if>  ng-cloak>
++
++  <div id="contenidorForm" ng-controller="ControlHorarisProfessoratInspeccioController as controller"
++       ng-init="controller.init('<c:out value="${sessionScope.cursAcademic}"/>')" >
++    <div class="box box-warning">
++      <div class="box-header with-border">
++        <h3 id="titolLegend" class="box-title" >Control d'horaris</h3>
++      </div>
++
++      <div id="contenidorCerca" class="box-body">
++        <form name="formCerca" ng-submit="controller.generaInforme()">
++          <fieldset id="fdCerca">
++            <legend lang="filtreDades"></legend>
++            <combo-centres
++                sel-any = "controller.formulariCerca.selAny"
++                sel-tipus-centre = "controller.formulariCerca.selTipusCentre"
++                sel-centre = "controller.formulariCerca.selCentre"
++                mostrar-tipus-centre-abr = "true"
++                mostrar-any="true"
++                add-label-tipus-centre="true"
++                add-label-entre="true"
++                mandatory="true"
++                any-cerca="${sessionScope.cursAcademic}"
++            >
++            </combo-centres>
++
++          </fieldset>
++          <fieldset>
++            <legend lang="llistat"></legend>
++            <div class="row">
++              <div class="radio col-sm-12">
++                <label class="control-label">
++                  <input type="radio" ng-model="controller.informe" name="llistat" ng-value="1" />
++                  <fmt:message bundle="${missatge}" key="diferenciesHoresPri"/>
++                </label>
++              </div>
++            </div>
++            <div class="row">
++              <div class="radio col-sm-12">
++                <label class="control-label">
++                  <input type="radio" ng-model="controller.informe" name="llistat" ng-value="2" />
++                  <fmt:message bundle="${missatge}" key="diferenciesHoresSec"/>
++                </label>
++              </div>
++            </div>
++            <div class="row">
++              <div class="radio col-sm-12">
++                <label class="control-label">
++                  <input type="radio" ng-model="controller.informe" name="llistat" ng-value="3" />
++                  <fmt:message bundle="${missatge}" key="horesLectivesProfPri"/>
++                </label>
++              </div>
++            </div>
++
++            <div class="row">
++              <div class="radio col-sm-12">
++                <label class="control-label">
++                  <input type="radio" ng-model="controller.informe" name="llistat" ng-value="4" />
++                  <fmt:message bundle="${missatge}" key="horesLectivesProfSec"/>
++                </label>
++              </div>
++            </div>
++
++            <div class="row">
++              <div class="radio col-sm-12">
++                <label class="control-label">
++                  <input type="radio" ng-model="controller.informe" name="llistat" ng-value="5" />
++                  <fmt:message bundle="${missatge}" key="horesDocenciaProf"/>
++                </label>
++              </div>
++            </div>
++
++            <div class="row">
++              <div class="radio col-sm-12">
++                <label class="control-label">
++                  <input type="radio" ng-model="controller.informe" name="llistat" ng-value="6" />
++                  <fmt:message bundle="${missatge}" key="horesPermanenciaPri"/>
++                </label>
++              </div>
++            </div>
++
++            <div class="row">
++              <div class="radio col-sm-12">
++                <label class="control-label">
++                  <input type="radio" ng-model="controller.informe" name="llistat" ng-value="7" />
++                  <fmt:message bundle="${missatge}" key="horesPermanenciaSec"/>
++                </label>
++              </div>
++            </div>
++
++            <div class="row">
++              <div class="radio col-sm-12">
++                <label class="control-label">
++                  <input type="radio" ng-model="controller.informe" name="llistat" ng-value="8" />
++                  <fmt:message bundle="${missatge}" key="profMes18Sessions"/>
++                </label>
++              </div>
++            </div>
++
++            <div class="row">
++              <div class="radio col-sm-12">
++                <label class="control-label">
++                  <input type="radio" ng-model="controller.informe" name="llistat" ng-value="9" />
++                  <fmt:message bundle="${missatge}" key="problemesAlternancia"/>
++                </label>
++              </div>
++            </div>
++            <div class="row">
++              <div class="radio col-sm-12">
++                <label class="control-label">
++                  <input type="radio" ng-model="controller.informe" name="llistat" ng-value="12" />
++                  <fmt:message bundle="${missatge}" key="nombreAlumnesMateria"/>
++                </label>
++              </div>
++            </div>
++            <div class="row">
++              <div class="radio col-sm-12">
++                <label class="control-label">
++                  <input type="radio" ng-model="controller.informe" name="llistat" ng-value="13" />
++                  <fmt:message bundle="${missatge}" key="controlPermanenciaSecundaria"/>
++                </label>
++              </div>
++            </div>
++            <div class="row">
++              <div class="radio col-sm-12">
++                <label class="control-label">
++                  <input type="radio" ng-model="controller.informe" name="llistat" ng-value="14" />
++                  <fmt:message bundle="${missatge}" key="controlPeriodesLectiusSecundaria"/>
++                </label>
++              </div>
++            </div>
++
++            <div class="row">
++              <div class="col-sm-12">
++                <div class="pull-right">
++                  <button type="submit" class="btn btn-primary" data-toggle="tooltip" placement="auto left" title="<fmt:message bundle='${missatge}' key='mostra_informe' />" >
++                    <span class="glyphicon glyphicon-print" aria-hidden="true" ></span>
++                  </button>
++                </div>
++              </div>
++            </div>
++          </fieldset>
++        </form>
++      </div>
++    </div>
++  </div>
++</section>
++
++<jsp:include page="/WEB-INF/views/incRoles.jsp"/>
++
+diff --git a/modules/www/xestib.war/js/components/centresComboComponent.js b/modules/www/xestib.war/js/components/centresComboComponent.js
+index f338e1d7c890b4f46db1eb553904fc89e884980b..cc1f6a61b5fd2bef9657389065a83e9bfbf5bd59 100644
+--- a/modules/www/xestib.war/js/components/centresComboComponent.js
++++ b/modules/www/xestib.war/js/components/centresComboComponent.js
+@@ -1,289 +1,300 @@
+ angular.module("MultiComboCentres", ['exceptionOverride'])
+ 
+-.constant('URL_JSON_LLISTA_TIPUS_CENTRE',"/xestib/xestib/lov/centre/llistaTipusCentre.json")
+-.constant('URL_JSON_LLISTA_CENTRES',"/xestib/xestib/lov/centre/llistaCentres.json")
+-.constant('URL_JSON_LLISTA_CURSOS_CENTRE',"/xestib/xestib/lov/llistaCursosCentre.json")
++  .constant('URL_JSON_LLISTA_TIPUS_CENTRE',"/xestib/xestib/lov/centre/llistaTipusCentre.json")
++  .constant('URL_JSON_LLISTA_CENTRES',"/xestib/xestib/lov/centre/llistaCentres.json")
++  .constant('URL_JSON_LLISTA_CURSOS_CENTRE',"/xestib/xestib/lov/llistaCursosCentre.json")
+ 
+-.controller("MultiComboCentresController",['$http','$scope','$window', 'multiComboCentresFactory', 'MissatgesService', 'settingsComboCentre',
++  .controller("MultiComboCentresController",['$http','$scope','$window', 'multiComboCentresFactory', 'MissatgesService', 'settingsComboCentre',
+     function ($http, $scope, $window, multiComboCentresFactory, MissatgesService, settingsComboCentre) {
+ 
+-        var obj = this;
+-
+-        obj.disabled = settingsComboCentre.disabled;
+-        obj.mandatory = settingsComboCentre.mandatory;
+-        obj.tots = settingsComboCentre.tots;
+-        obj.totsTipusCentre = settingsComboCentre.totsTipusCentre;
+-        obj.totsCentre = settingsComboCentre.totsCentre;
+-        obj.totsAny = settingsComboCentre.totsAny;
+-        obj.codiCentre = settingsComboCentre.codiCentre;
+-        obj.codiTipusCentre = settingsComboCentre.codiTipusCentre;
+-        obj.mostrarAny = settingsComboCentre.mostrarAny;
+-        obj.anyCerca = settingsComboCentre.anyCerca;
+-        obj.mostrarTipusCentreAbr = settingsComboCentre.mostrarTipusCentreAbr;
+-
+-        obj.dict = $window.Dict;
+-        obj.roleManager = $window.roleManager;
+-        new Traduccio(obj.dict);
+-
+-        this.initAny = function() {
+-            obj.anys = (obj.tots || obj.totsAny) ? [{anyInicial:null, anyAcademicCurt:_("tots")}] : [{anyInicial:-1, anyAcademicCurt:_("carregant")}];
+-            obj.selAny = obj.anys[0];
+-        };
+-
+-        this.initTipusCentre = function() {
+-            obj.tipusCentre = (obj.tots || obj.totsTipusCentre) ? [{codi:null, nom:_("tots"), nomAbreujat:_("tots")}] : [{codi:-1, nom:_("carregant"), nomAbreujat:_("carregant")}];
+-            obj.selTipusCentre = obj.tipusCentre[0];
+-        };
+-
+-        this.initCentre = function() {
+-            obj.centres = (obj.tots || obj.totsCentre) ? [{codi:null, nom:_("tots"), nomSenseTipus:_("tots")}] : [{codi:-1, nom:_("carregant"), nomSenseTipus:_("carregant")}];
+-            obj.selCentre = obj.centres[0];
+-        };
+-
+-        this.initCombosCentres = function(){
+-            if (obj.mostrarAny) { obj.obteAnysMatricula(); }
+-            obj.obteTipusCentres();
+-        };
+-
+-        this.obteAnysMatricula = function() {
+-
+-            multiComboCentresFactory.getAnysMatricules()
+-                .then(function success(response) {
+-                    if (response.data.length > 0) {
+-                        obj.anys = response.data;
+-                        if (obj.tots || obj.totsAny) {
+-                            obj.anys = [{anyInicial:null, anyAcademicCurt:_("tots")}].concat(obj.anys);
+-                        }
+-
+-                        if (obj.anyCerca == undefined) {
+-                            obj.selAny = obj.anys[0];
+-                        } else {
+-                            obj.selAny = {anyInicial: obj.anyCerca};
+-                        }
+-                    }
+-                });
+-        };
+-
+-        this.obteTipusCentres = function() {
+-            multiComboCentresFactory.getTipusCentre().
+-            then(function success(response) {
+-                if (response.data.length > 0) {
+-                    obj.tipusCentre = response.data;
+-                    if ((obj.tots || obj.totsTipusCentre) && obj.filterTipusCentre == undefined) {
+-                        obj.tipusCentre  = [{codi:null, nom:_("tots"), nomAbreujat:_("tots")}].concat(obj.tipusCentre);
+-                    }
+-
+-                    if (obj.codiTipusCentre != ''){
+-                        obj.selTipusCentre = {codi : obj.codiTipusCentre};
+-                    } else {
+-                        obj.selTipusCentre = obj.tipusCentre [0];
+-                    }
+-                }
+-                return obj.selTipusCentre;
+-            })
+-            .then(function(selTipusCentre) {
+-                  obj.centres = [{codi:null, nom:_("tots"), nomSenseTipus:_("tots")}];
+-                  obj.selCentre = obj.centres[0];
+-                if (selTipusCentre != undefined && obj.codiCentre != '') obj.changeTipusCentre(selTipusCentre.codi)
+-            });
+-        };
+-
+-        this.obteCentres = function(tipusCentre) {
+-            if (tipusCentre == null) {
+-                obj.centres = [{codi:null, nom:_("tots"), nomSenseTipus:_("tots")}];
+-                obj.selCentre = obj.centres[0];
+-                return;
++      var obj = this;
++      obj.loadingCentresCombo = new LoadingSignal();
++
++      obj.disabled = settingsComboCentre.disabled;
++      obj.mandatory = settingsComboCentre.mandatory;
++      obj.addLabel = settingsComboCentre.addLabel;
++      obj.addLabelTipusCentre = settingsComboCentre.addLabelTipusCentre;
++      obj.addLabelCentre = settingsComboCentre.addLabelCentre;
++      obj.addLabelAny = settingsComboCentre.addLabelAny;
++      obj.codiCentre = settingsComboCentre.codiCentre;
++      obj.codiTipusCentre = settingsComboCentre.codiTipusCentre;
++      obj.mostrarAny = settingsComboCentre.mostrarAny;
++      obj.anyCerca = settingsComboCentre.anyCerca;
++      obj.mostrarTipusCentreAbr = settingsComboCentre.mostrarTipusCentreAbr;
++
++      obj.dict = $window.Dict;
++      obj.roleManager = $window.roleManager;
++      new Traduccio(obj.dict);
++
++      this.initAny = function() {
++        obj.anys = (obj.addLabel || obj.addLabelAny) ? [{anyInicial:null, anyAcademicCurt:_("label")}] : [{anyInicial:-1, anyAcademicCurt:_("carregant")}];
++        obj.selAny = obj.anys[0];
++      };
++
++      this.initTipusCentre = function() {
++        obj.tipusCentre = (obj.addLabel || obj.addLabelTipusCentre) ? [{codi:null, nom:_("label"), nomAbreujat:_("label")}] : [{codi:-1, nom:_("carregant"), nomAbreujat:_("carregant")}];
++        obj.selTipusCentre = obj.tipusCentre[0];
++      };
++
++      this.initCentre = function() {
++        obj.centres = (obj.addLabel || obj.addLabelCentre) ? [{codi:null, nom:_("label"), nomSenseTipus:_("label")}] : [{codi:-1, nom:_("carregant"), nomSenseTipus:_("carregant")}];
++        obj.selCentre = obj.centres[0];
++      };
++
++      this.initCombosCentres = function(){
++        if (obj.mostrarAny) { obj.obteAnysMatricula(); }
++        obj.obteTipusCentres();
++      };
++
++      this.obteAnysMatricula = function() {
++        obj.loadingCentresCombo.show();
++        multiComboCentresFactory.getAnysMatricules()
++          .then(function success(response) {
++            obj.loadingCentresCombo.hide();
++            if (response.data.length > 0) {
++              obj.anys = response.data;
++              if (obj.addLabel || obj.addLabelAny) {
++                obj.anys = [{anyInicial:null, anyAcademicCurt:_("label")}].concat(obj.anys);
++              }
++
++              if (obj.anyCerca === undefined) {
++                  obj.selAny = obj.anys[0];
++              } else {
++                  obj.selAny = {anyInicial: obj.anyCerca};
++              }
+             }
+-            multiComboCentresFactory.getCentres(tipusCentre)
+-                .then(function success(response) {
+-                    if (response.data.length > 0) {
+-                        obj.centres = response.data;
+-                        if ((obj.tots || obj.totsCentre) && obj.filterCentre == undefined) {
+-                            obj.centres = [{codi:null, nom:_("tots"), nomSenseTipus:_("tots")}].concat(obj.centres);
+-                        }
+-
+-                        if (obj.codiCentre != '' && obj.isCentreContained(obj.codiCentre) ) {
+-                            obj.selCentre = {codi : obj.codiCentre };
+-                        } else {
+-                            obj.selCentre = obj.centres[0];
+-                        }
+-                    }
+-                });
+-        };
+-
+-        this.isCentreContained = function (codiCentre) {
+-            var isCentreContained = false;
+-            for (var key  in obj.centres) {
+-                if (obj.centres[key].codi == codiCentre) {
+-                    isCentreContained = true;
+-                    break;
+-                }
++        });
++      };
++
++      this.obteTipusCentres = function() {
++        obj.loadingCentresCombo.show();
++        multiComboCentresFactory.getTipusCentre().
++        then(function success(response) {
++          obj.loadingCentresCombo.hide();
++          if (response.data.length > 0) {
++            obj.tipusCentre = response.data;
++            if ((obj.addLabel || obj.addLabelTipusCentre) && obj.filterTipusCentre == undefined) {
++              obj.tipusCentre  = [{codi:null, nom:_("label"), nomAbreujat:_("label")}].concat(obj.tipusCentre);
+             }
+-            return isCentreContained;
+-        };
+ 
+-        this.changeTipusCentre = function(tipusCentre) {
+-            if (tipusCentre == undefined) tipusCentre = obj.selTipusCentre.codi;
+-            if (obj.isValidCodi(tipusCentre)) {
+-                obj.obteCentres(tipusCentre);
++            if (obj.codiTipusCentre != undefined && obj.codiTipusCentre !== ''){
++              obj.selTipusCentre = {codi : obj.codiTipusCentre};
++            } else {
++              obj.selTipusCentre = obj.tipusCentre [0];
++            }
++          }
++          return obj.selTipusCentre;
++        })
++          .then(function(selTipusCentre) {
++            obj.centres = [{codi:null, nom:_("label"), nomSenseTipus:_("label")}];
++            obj.selCentre = obj.centres[0];
++            if (selTipusCentre !== undefined  && obj.codiCentre !== '') obj.changeTipusCentre(selTipusCentre.codi)
++          });
++      };
++
++      this.obteCentres = function(tipusCentre) {
++        if (tipusCentre == null) {
++          obj.centres = [{codi:null, nom:_("label"), nomSenseTipus:_("label")}];
++          obj.selCentre = obj.centres[0];
++          return;
++        }
++        obj.loadingCentresCombo.show();
++        multiComboCentresFactory.getCentres(tipusCentre)
++          .then(function success(response) {
++            obj.loadingCentresCombo.hide();
++            if (response.data.length > 0) {
++              obj.centres = response.data;
++              if ((obj.addLabel || obj.addLabelCentre) && obj.filterCentre == undefined) {
++                obj.centres = [{codi:null, nom:_("label"), nomSenseTipus:_("label")}].concat(obj.centres);
++              }
++
++              if (obj.codiCentre != undefined && obj.codiCentre !== '' && obj.isCentreContained(obj.codiCentre) ) {
++                obj.selCentre = {codi : obj.codiCentre };
++              } else {
++                obj.selCentre = obj.centres[0];
++              }
+             }
+-        };
++          });
++      };
++
++      this.isCentreContained = function (codiCentre) {
++        var isCentreContained = false;
++        for (var key  in obj.centres) {
++          if (obj.centres[key].codi == codiCentre) {
++            isCentreContained = true;
++            break;
++          }
++        }
++        return isCentreContained;
++      };
++
++      this.changeTipusCentre = function(tipusCentre) {
++        if (tipusCentre == undefined) tipusCentre = obj.selTipusCentre.codi;
++        if (obj.isValidCodi(tipusCentre)) {
++          obj.obteCentres(tipusCentre);
++        }
++      };
+ 
+-        this.isValidCodi = function(codi) {
+-            return codi != -1 && codi != "";
+-        };
++      this.isValidCodi = function(codi) {
++        return codi != -1 && codi != "";
++      };
+ 
+-        this.obteAnyAcademic = function(anyInicial) {
++      this.obteAnyAcademic = function(anyInicial) {
+ 
+-            if (anyInicial == undefined && !obj.mostrarAny) anyInicial = obj.anyCerca;
+-            else if (anyInicial == undefined) anyInicial = obj.selAny.anyInicial;
++        if (anyInicial == undefined && !obj.mostrarAny) anyInicial = obj.anyCerca;
++        else if (anyInicial == undefined) anyInicial = obj.selAny.anyInicial;
+ 
+-            return anyInicial;
+-        }
++        return anyInicial;
++      }
+ 
+     }]
+-)
+-.factory('MissatgesService', function () {
++  )
++  .factory('MissatgesService', function () {
+     return {
+-        llistaNoCarregada: function (pTexte) {
+-            var msg = _("llista") + " " + pTexte + " " + _("noCarregada") + "\n";
+-            alertGestib(msg);
+-        }
++      llistaNoCarregada: function (pTexte) {
++        var msg = _("llista") + " " + pTexte + " " + _("noCarregada") + "\n";
++        alertGestib(msg);
++      }
+     };
+-})
+-.factory("multiComboCentresFactory", function ($http, URL_JSON_LLISTA_CURSOS_CENTRE, URL_JSON_LLISTA_TIPUS_CENTRE, URL_JSON_LLISTA_CENTRES, settingsComboCentre) {
++  })
++  .factory("multiComboCentresFactory", function ($http,
++                                                 URL_JSON_LLISTA_CURSOS_CENTRE,
++                                                 URL_JSON_LLISTA_TIPUS_CENTRE,
++                                                 URL_JSON_LLISTA_CENTRES,
++                                                 settingsComboCentre) {
+     var multiComboCentresFactory = {};
+ 
+     multiComboCentresFactory.getAnysMatricules =  function () { return $http.get(URL_JSON_LLISTA_CURSOS_CENTRE, {}); };
+     multiComboCentresFactory.getTipusCentre =  function () { return $http.get(URL_JSON_LLISTA_TIPUS_CENTRE, {}); };
+     multiComboCentresFactory.getCentres =  function (_tipusCentre, _baixa) { return $http.get(URL_JSON_LLISTA_CENTRES,
+-        {
+-            params: { tipusCentre: _tipusCentre, baixa: _baixa != null || _baixa != undefined ? _baixa : settingsComboCentre.veureCentresBaixa }
+-        });
++      {
++        params: { tipusCentre: _tipusCentre, baixa: _baixa != null || _baixa != undefined ? _baixa : settingsComboCentre.veureCentresBaixa }
++      });
+     };
+ 
+     return multiComboCentresFactory;
+ 
+-})
+-.directive('comboCentres', function () {
++  })
++  .directive('comboCentres', function () {
+     var obj = this;
+     obj.comboAnySel = '<select name="any" ng-model="comboCenCrl.selAny" ' +
+-        ' ng-disabled="comboCenCrl.disabled" ' +
+-        ' class="selectpicker" ' +
+-        ' ng-class="{FD: comboCenCrl.mandatory, FDO:!comboCenCrl.mandatory}" ' +
+-        ' ng-options="any.anyAcademicCurt for any in comboCenCrl.anys track by any.anyInicial"  ' +
+-        ' ng-change="comboCenCrl.doOnChangeAny()">' +
+-        ' ng-init="comboCenCrl.initAny()"' +
+-        ' ng-required="comboCenCrl.mandatory" >' +
+-        ' </select>';
++      ' ng-disabled="comboCenCrl.disabled" ' +
++      ' class="selectpicker" ' +
++      ' ng-class="{FD: comboCenCrl.mandatory, FDO:!comboCenCrl.mandatory}" ' +
++      ' ng-options="any.anyAcademicCurt for any in comboCenCrl.anys track by any.anyInicial"  ' +
++      ' ng-change="comboCenCrl.doOnChangeAny()" ' +
++      ' ng-init="comboCenCrl.initAny()" ' +
++      ' ng-required="comboCenCrl.mandatory" >' +
++      ' </select>';
+ 
+     obj.comboTipusCentreSel = '<select name="tip_cen" ng-model="comboCenCrl.selTipusCentre" ' +
+-        ' ng-disabled="comboCenCrl.disabled" ' +
+-        ' class="selectpicker" ' +
+-        ' ng-class="{FD: comboCenCrl.mandatory, FDO:!comboCenCrl.mandatory}" ' +
+-        ' ng-options="comboCenCrl.mostrarTipusCentreAbr ? tipusCentre.nomAbreujat :tipusCentre.nom for tipusCentre in comboCenCrl.tipusCentre | filter:{codi:comboCenCrl.filterTipusCentre} track by tipusCentre.codi"  ' +
+-        ' ng-init="comboCenCrl.initTipusCentre()" ' +
+-        ' ng-required="comboCenCrl.mandatory" ' +
+-        ' ng-change="comboCenCrl.changeTipusCentre(); comboCenCrl.doOnChangeTipus()">' +
+-        ' </select>';
++      ' ng-disabled="comboCenCrl.disabled" ' +
++      ' class="selectpicker" ' +
++      ' ng-class="{FD: comboCenCrl.mandatory, FDO:!comboCenCrl.mandatory}" ' +
++      ' ng-options="comboCenCrl.mostrarTipusCentreAbr ? tipusCentre.nomAbreujat :tipusCentre.nom for tipusCentre in comboCenCrl.tipusCentre | filter:{codi:comboCenCrl.filterTipusCentre} track by tipusCentre.codi"  ' +
++      ' ng-init="comboCenCrl.initTipusCentre()" ' +
++      ' ng-required="comboCenCrl.mandatory" ' +
++      ' ng-change="comboCenCrl.changeTipusCentre(); comboCenCrl.doOnChangeTipus()">' +
++      ' </select>';
+ 
+     obj.comboCentresSel = '<select name="cen" ng-model="comboCenCrl.selCentre" ' +
+-        ' ng-disabled="comboCenCrl.disabled" ' +
+-        ' class="selectpicker" ' +
+-        ' ng-class="{FD: comboCenCrl.mandatory, FDO:!comboCenCrl.mandatory}" ' +
+-        ' ng-options="comboCenCrl.mostrarTipusCentreAbr ?centre.nomSenseTipus : centre.nom for centre in comboCenCrl.centres  | filter:{codi:comboCenCrl.filterCentre} track by centre.codi "  ' +
+-        ' ng-init="comboCenCrl.initCentre()"' +
+-        ' ng-required="comboCenCrl.mandatory" ' +
+-        ' ng-change="comboCenCrl.doOnChangeCentre()">' +
+-        ' </select>';
++      ' ng-disabled="comboCenCrl.disabled" ' +
++      ' class="selectpicker" ' +
++      ' ng-class="{FD: comboCenCrl.mandatory, FDO:!comboCenCrl.mandatory}" ' +
++      ' ng-options="comboCenCrl.mostrarTipusCentreAbr ?centre.nomSenseTipus : centre.nom for centre in comboCenCrl.centres  | filter:{codi:comboCenCrl.filterCentre} track by centre.codi "  ' +
++      ' ng-init="comboCenCrl.initCentre()"' +
++      ' ng-required="comboCenCrl.mandatory" ' +
++      ' ng-change="comboCenCrl.doOnChangeCentre()">' +
++      ' </select>';
+ 
+     function comboCentres() {
+-        if (!IS_BOOTSTRAP) {
+-            return '<div ng-init="comboCenCrl.initCombosCentres()">' +
+-                '<p ng-if="comboCenCrl.mostrarAny">' +
+-                '<label lang="any_aca" >{{comboCenCrl.dict.any_aca}}:</label><br/>' +
+-                obj.comboAnySel +
+-                '</p>' +
+-                '<p>' +
+-                '<label lang="tipusCentre" ></label><br/>' +
+-                obj.comboTipusCentreSel +
+-                '</p>' +
+-                '<p>' +
+-                '<label lang="centre" ></label><br/>' +
+-                obj.comboCentresSel +
+-                '</p>' +
+-                '</div>';
+-        } else {
+-            return '<div ng-init="comboCenCrl.initCombosCentres()">' +
+-                '<div class="col-sm-1" ng-if="comboCenCrl.mostrarAny">' +
+-                '<label lang="any_aca" class="control-label">{{comboCenCrl.dict.any_aca}}:</label>' +
+-                obj.comboAnySel +
+-                '</div>' +
+-                '<div class="col-sm-2">' +
+-                '<label lang="tipusCentre" class="control-label"></label>'+
+-                obj.comboTipusCentreSel +
+-                '</div>' +
+-                '<div class="col-sm-4">' +
+-                '<label lang="centre" class="control-label"></label>' +
+-                obj.comboCentresSel +
+-                '</div>' +
+-                '</div>';
+-        }
++      if (!IS_BOOTSTRAP) {
++        return '<div ng-init="comboCenCrl.initCombosCentres()">' +
++          '<p ng-if="comboCenCrl.mostrarAny">' +
++          '<label lang="any_aca" >{{comboCenCrl.dict.any_aca}}:</label><br/>' +
++          obj.comboAnySel +
++          '</p>' +
++          '<p>' +
++          '<label lang="tipusCentre" ></label><br/>' +
++          obj.comboTipusCentreSel +
++          '</p>' +
++          '<p>' +
++          '<label lang="centre" ></label><br/>' +
++          obj.comboCentresSel +
++          '</p>' +
++          '</div>';
++      } else {
++        return '<div ng-init="comboCenCrl.initCombosCentres()">' +
++          '<div class="col-sm-1" ng-if="comboCenCrl.mostrarAny">' +
++          '<label lang="any_aca" class="control-label">{{comboCenCrl.dict.any_aca}}:</label>' +
++          obj.comboAnySel +
++          '</div>' +
++          '<div class="col-sm-2">' +
++          '<label lang="tipusCentre" class="control-label"></label>'+
++          obj.comboTipusCentreSel +
++          '</div>' +
++          '<div class="col-sm-4">' +
++          '<label lang="centre" class="control-label"></label>' +
++          obj.comboCentresSel +
++          '</div>' +
++          '</div>';
++      }
+ 
+     }
+     return {
+-        scope: {
+-            selAny: "="
+-            , selTipusCentre: "="
+-            , selCentre: "="
+-            , mandatory: "@"
+-            , codiCentre: "@"
+-            , codiTipusCentre : "@"
+-            , filterTipusCentre : "@"   //filter blanco significa null
+-            , filterCentre : "@"        //filter blanco significa null
+-            , disabled: "@"
+-            , mostrarTipusCentreAbr: "@"
+-            , tots: "@"
+-            , totsTipusCentre: "@"
+-            , totsCentre: "@"
+-            , totsAny: "@"
+-            , mostrarAny: "@"
+-            , veureCentresBaixa: "@"
+-            , doOnChangeAny: '&'
+-            , doOnChangeTipus: '&'
+-            , doOnChangeCentre: '&'
+-
+-        },
+-        transclude: true,
+-        controller: 'MultiComboCentresController',
+-        controllerAs: 'comboCenCrl',
+-        bindToController: true,
+-        template: comboCentres
++      scope: {
++        selAny: "="
++        , selTipusCentre: "="
++        , selCentre: "="
++        , mandatory: "@"
++        , codiCentre: "@"
++        , anyCerca: "@"
++        , codiTipusCentre : "@"
++        , filterTipusCentre : "@"   //filter blanco significa null
++        , filterCentre : "@"        //filter blanco significa null
++        , disabled: "@"
++        , mostrarTipusCentreAbr: "@"
++        , addLabel: "@"
++        , addLabelTipusCentre: "@"
++        , addLabelCentre: "@"
++        , addLabelAny: "@"
++        , mostrarAny: "@"
++        , veureCentresBaixa: "@"
++        , doOnChangeAny: '&'
++        , doOnChangeTipus: '&'
++        , doOnChangeCentre: '&'
++
++      },
++      transclude: true,
++      controller: 'MultiComboCentresController',
++      controllerAs: 'comboCenCrl',
++      bindToController: true,
++      template: comboCentres
+ 
+     };
+-})
+-.provider('settingsComboCentre', [function() {
++  })
++  .provider('settingsComboCentre', [function() {
+     var settings = {
+-        disabled : false,
+-        mandatory : false,
+-        tots : false,
+-        totsTipusCentre : false,
+-        totsCentre : false,
+-        totsAny : false,
+-        codiCentre: '',
+-        mostrarAny : false,
+-        anyCerca : '',
+-        codiTipusCentre : '',
+-        veureCentresBaixa : false,
+-        mostrarTipusCentreAbr : false
++      disabled : false,
++      mandatory : false,
++      addLabel : false,
++      addLabelTipusCentre : false,
++      addLabelCentre : false,
++      addLabelAny : false,
++      codiCentre: '',
++      mostrarAny : false,
++      anyCerca : '',
++      codiTipusCentre : '',
++      veureCentresBaixa : false,
++      mostrarTipusCentreAbr : false
+     };
+ 
+     this.setDisabled                = function(_disabled) { settings.disabled = _disabled; };
+     this.setMandatory               = function(_mandatory) { settings.mandatory = _mandatory; };
+-    this.setTots                    = function(_tots) { settings.tots = _tots;};
+-    this.setTotsTipusCentre         = function(_totsTipusCentre) { settings.totsTipusCentre = _totsTipusCentre;};
+-    this.setTotsCentre              = function(_totsCentre) { settings.totsCentre = _totsCentre;};
+-    this.setTotsAny                 = function(_totsAny) { settings.totsAny = _totsAny;};
++    this.setAddLabel                    = function(_addLabel) { settings.addLabel = _addLabel;};
++    this.setAddLabelTipusCentre         = function(_addLabelTipusCentre) { settings.addLabelTipusCentre = _addLabelTipusCentre;};
++    this.setAddLabelCentre              = function(_addLabelCentre) { settings.addLabelCentre = _addLabelCentre;};
++    this.setAddLabelAny                 = function(_addLabelAny) { settings.addLabelAny = _addLabelAny;};
+     this.setCodiCentre              = function(_codiCentre) { settings.codiCentre = _codiCentre;};
+     this.setMostrarAny              = function(_mostrarAny) { settings.mostrarAny = _mostrarAny;};
+     this.setAnyCerca                = function(_anyCerca) { settings.anyCerca = _anyCerca; };
+@@ -292,4 +303,4 @@ angular.module("MultiComboCentres", ['exceptionOverride'])
+     this.setMostrarTipusCentreAbr   = function(_mostrarTipusCentreAbr) { settings.mostrarTipusCentreAbr = _mostrarTipusCentreAbr; };
+ 
+     this.$get           = function() { return settings; };
+-}]);
+\ No newline at end of file
++  }]);
+\ No newline at end of file
+diff --git a/modules/www/xestib.war/js/llistes/llistaControlHorarisProfessoratInspeccio.js b/modules/www/xestib.war/js/llistes/llistaControlHorarisProfessoratInspeccio.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..415c66129ba6c24744153bf1d72b0f322e16027d
+--- /dev/null
++++ b/modules/www/xestib.war/js/llistes/llistaControlHorarisProfessoratInspeccio.js
+@@ -0,0 +1,69 @@
++var app = angular.module("ControlHorarisProfessoratInspeccio", ['exceptionOverride', 'MultiComboCentres', 'ngSanitize']);
++
++app.config(function (settingsComboCentreProvider) {
++  // settingsComboCentreProvider.setMandatory(true);
++  // settingsComboCentreProvider.setDisabled(false);
++  settingsComboCentreProvider.setAddLabel(true);
++  settingsComboCentreProvider.setVeureCentresBaixa(false);
++  settingsComboCentreProvider.setMostrarTipusCentreAbr(true);
++});
++
++app.controller("ControlHorarisProfessoratInspeccioController",
++  ['$http', '$scope', '$window', '$filter',
++    function ($http, $scope, $window) {
++
++      var obj = this;
++      obj.loadingModal = new LoadingSignal();
++      obj.urlsInformes = [""
++        ,"/xestib/llistes/centre/diferenciesHoresImpartides.pdf"
++        ,"/xestib/llistes/centre/diferenciesHoresImpartides.pdf"
++        ,"/xestib/llistes/centre/horesLectivesProfessor.pdf"
++        ,"/xestib/llistes/centre/horesLectivesProfessor.pdf"
++        ,"/xestib/llistes/centre/horesDocenciaDirectaProfessor.pdf"
++        ,"/xestib/llistes/centre/horesPermanenciaProfessorCentre.pdf"
++        ,"/xestib/llistes/centre/horesPermanenciaProfessorCentre.pdf"
++        ,"/xestib/llistes/centre/horesMesHoresLectives.pdf"
++        ,"/xestib/llistes/centre/alternanciaHoraria.pdf"
++        ,"/xestib/llistes/centre/desdoblamentMateria.pdf"
++        ,"/xestib/llistes/centre/ratioAlumnesProfessorSessio.pdf"
++        ,"/xestib/llistes/centre/alumnesMateriaProfessor.pdf"
++        ,"/xestib/llistes/centre/controlSetmanalHoresPermanenciaProfessorCentre.pdf"
++        ,"/xestib/llistes/centre/controlSetmanalPeriodeLectiuProfessorCentre.pdf"
++      ];
++
++      obj.formulariCerca = {
++        selTipusCentre: {codi:null},
++        selCentre: {codi: null},
++        selAny: {anyInicial:null}
++      };
++
++      obj.init = function (_anyAcademic) {
++        var obj = this;
++        obj.dict = $window.Dict;
++        new Traduccio(obj.dict);
++
++        obj.formulariCerca = {
++          selTipusCentre: {codi:null},
++          selCentre: {codi: null},
++          selAny: {anyInicial:_anyAcademic}
++        };
++
++        obj.informe = 1;
++
++      };
++
++      obj.generaInforme = function () {
++        var obj = this;
++
++        if (obj.formulariCerca.selCentre.codi === null) {
++          alertGestib('Centre és obligatori');
++          return;
++        }
++        var params = "codiCentre=" + obj.formulariCerca.selCentre.codi + "&any=" + obj.formulariCerca.selAny.anyInicial;
++        if (obj.informe === "1" || obj.informe === "3" || obj.informe === "6") params = "&primaria=1";
++          obrirFinestraImpressio(obj.urlsInformes[obj.informe], params, "POST");
++      };
++    }
++])
++;
++
