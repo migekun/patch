@@ -1,0 +1,1302 @@
+diff --git a/modules/logica/src/es/caib/xestib/logica/servei/calendari/model/EventAbstract.java b/modules/logica/src/es/caib/xestib/logica/servei/calendari/model/EventAbstract.java
+index 3f31ea1ed47910563e2fec4027cfb38dae85645d..c55c8cdbc5ead58a23f41e3271750155f7086a80 100644
+--- a/modules/logica/src/es/caib/xestib/logica/servei/calendari/model/EventAbstract.java
++++ b/modules/logica/src/es/caib/xestib/logica/servei/calendari/model/EventAbstract.java
+@@ -9,6 +9,7 @@ public abstract class EventAbstract implements Event {
+     protected String detall;
+     protected Date dataModificacio;
+     protected String lloc;
++    protected String idGrupEvent;
+ 
+     protected EventId id;
+ 
+@@ -65,4 +66,8 @@ public abstract class EventAbstract implements Event {
+     public void setLloc(String lloc) {
+         this.lloc = lloc;
+     }
++
++    public String getIdGrupEvent() {return idGrupEvent;}
++    public void setIdGrupEvent(String idGrupEvent) {this.idGrupEvent = idGrupEvent;}
++
+ }
+diff --git a/modules/logica/src/es/caib/xibcen/logica/ejb/CentreServiceEJB.java b/modules/logica/src/es/caib/xibcen/logica/ejb/CentreServiceEJB.java
+index 5f2058ec7b452ff86ad67b716370696aaea4bb8f..669e00efa8561e1409901cc07f2c9c79c65cca79 100644
+--- a/modules/logica/src/es/caib/xibcen/logica/ejb/CentreServiceEJB.java
++++ b/modules/logica/src/es/caib/xibcen/logica/ejb/CentreServiceEJB.java
+@@ -10,7 +10,6 @@ import es.caib.xestib.logica.domini.marcatge.IpCentre;
+ import es.caib.xestib.logica.ejb.InterceptorSeguretat;
+ import es.caib.xestib.util.CursAcademic;
+ import es.caib.xibalu.logica.domini.alumne.Expedient;
+-import es.caib.xibalu.logica.domini.persona.Alumne;
+ import es.caib.xibalu.logica.domini.persona.Persona;
+ import es.caib.xibalu.logica.domini.persona.RelacioPersonaCentre;
+ import es.caib.xibarb.logica.domini.departament.MateriaEnsenyamentDepartamentCentre;
+@@ -32,7 +31,6 @@ import es.caib.xibfal.logica.domini.PuntsCategoriaCentreAny;
+ import es.caib.xibhor.logica.domini.horaris.ApartatHorariGeneralCentre;
+ import es.caib.xibimp.logica.domini.Document;
+ import es.caib.xibmat.logica.domini.grup.EventAgenda;
+-import es.caib.xibmat.logica.domini.grup.Grup;
+ import es.caib.xibmat.logica.domini.matricula.Matricula;
+ import es.caib.xibtme.logica.domini.centre.*;
+ import es.caib.xibtme.logica.domini.tipus.Periode;
+@@ -541,11 +539,11 @@ public class CentreServiceEJB implements CentreService {
+         impl.altaEventAgenda(codiCentre, any, codiTipusEvent, curs, trimestre, dataInici, horaInici, dataFi, horaFi, observacions, assistents, acordsAnteriors, temesTractats, acords, titol, codiGrup);
+     }
+ 
+-    public void altaEventActivitat(Long codiGrup, Long codiSubmateria, Collection<Alumne> alumnesEvent, String dataInici, String horaInici, String dataFi, String horaFi, String observacions, String lloc, Integer tipusEventAgenda, boolean visibleFamilies) {
+-        impl.altaEventActivitat(codiGrup, codiSubmateria, alumnesEvent, dataInici, horaInici, dataFi, horaFi, observacions, lloc, tipusEventAgenda, visibleFamilies);
++    public void altaEventActivitat(CursAcademic any, String professor, Long codiGrup, Long codiSubmateria, String dataInici, String horaInici, String dataFi, String horaFi, String observacions, String lloc, Integer tipusEventAgenda, boolean visibleFamilies) {
++        impl.altaEventActivitat(any, professor , codiGrup, codiSubmateria, dataInici, horaInici, dataFi, horaFi, observacions, lloc, tipusEventAgenda, visibleFamilies);
+     }
+-    public void altaEventActivitatGenerica(Centre centre, CursAcademic cursAcademic, Grup grup, ArbreEnsenyament arbreEnsenyament, Integer ambit, Collection<Matricula> matriculesEvent, String dataInici, String horaInici, String dataFi, String horaFi, String observacions, String lloc, Integer tipusEventAgenda, boolean visibleFamilies) {
+-            impl.altaEventActivitatGenerica(centre, cursAcademic, grup, arbreEnsenyament, ambit, matriculesEvent, dataInici, horaInici, dataFi, horaFi, observacions, lloc, tipusEventAgenda, visibleFamilies);
++    public void altaEventActivitatGenerica(String centre, CursAcademic cursAcademic, Long grup, Long arbreEnsenyament, Integer ambit, String dataInici, String horaInici, String dataFi, String horaFi, String observacions, String lloc, Integer tipusEventAgenda, boolean visibleFamilies) {
++            impl.altaEventActivitatGenerica(centre, cursAcademic, grup, arbreEnsenyament, ambit, dataInici, horaInici, dataFi, horaFi, observacions, lloc, tipusEventAgenda, visibleFamilies);
+         }
+ 
+     @RolesAllowed({XIB_ADMINISTRADOR, XIB_INSPECTOR, XIB_DGPLACEN, XIB_OFICINA_ESCO , XIB_OFICINA_ESCO_FP , XIB_OFICINA_ESCO_03, XIB_ADMINISTRADOR_ESCO , XIB_ADMINISTRADOR_ESCO_FP , XIB_ADMINISTRADOR_ESCO_03, XIB_PERSONAL_CENTRE, XIB_ADMIN_LLIBRES, XIB_ADMINISTRADOR_FORCET,XIB_IEPI })
+diff --git a/modules/logica/src/es/caib/xibcen/logica/servei/CentreService.java b/modules/logica/src/es/caib/xibcen/logica/servei/CentreService.java
+index e3127486631c977582dc5bcbf45a8c0738f5aa51..93703c505a56c054646502322e1cc96bea3c5b45 100644
+--- a/modules/logica/src/es/caib/xibcen/logica/servei/CentreService.java
++++ b/modules/logica/src/es/caib/xibcen/logica/servei/CentreService.java
+@@ -8,7 +8,6 @@ import es.caib.xestib.logica.domini.cppe.TramitacioCPPE;
+ import es.caib.xestib.logica.domini.marcatge.IpCentre;
+ import es.caib.xestib.util.CursAcademic;
+ import es.caib.xibalu.logica.domini.alumne.Expedient;
+-import es.caib.xibalu.logica.domini.persona.Alumne;
+ import es.caib.xibalu.logica.domini.persona.Persona;
+ import es.caib.xibalu.logica.domini.persona.RelacioPersonaCentre;
+ import es.caib.xibarb.logica.domini.departament.MateriaEnsenyamentDepartamentCentre;
+@@ -29,7 +28,6 @@ import es.caib.xibfal.logica.domini.PuntsCategoriaCentreAny;
+ import es.caib.xibhor.logica.domini.horaris.ApartatHorariGeneralCentre;
+ import es.caib.xibimp.logica.domini.Document;
+ import es.caib.xibmat.logica.domini.grup.EventAgenda;
+-import es.caib.xibmat.logica.domini.grup.Grup;
+ import es.caib.xibmat.logica.domini.matricula.Matricula;
+ import es.caib.xibtme.logica.domini.centre.*;
+ import es.caib.xibtme.logica.domini.tipus.Periode;
+@@ -214,8 +212,8 @@ public interface CentreService  {
+     void eliminaPeriodeNoLectiu(long codi);
+     PeriodeNoLectiu carregaPeriodeNoLectiu(long codiFestiu);
+ 
+-    void altaEventActivitat(Long codiGrup, Long codiSubmateria, Collection<Alumne> alumnesEvent, String dataInici, String horaInici, String dataFi, String horaFi, String observacions, String lloc, Integer tipusEventAgenda, boolean visibleFamilies);
+-    void altaEventActivitatGenerica(Centre centre, CursAcademic cursAcademic, Grup grup, ArbreEnsenyament arbreEnsenyament, Integer ambit, Collection<Matricula> matriculesEvent, String dataInici, String horaInici, String dataFi, String horaFi, String observacions, String lloc, Integer tipusEventAgenda, boolean visibleFamilies);
++    void altaEventActivitat(CursAcademic any, String professor, Long codiGrup, Long codiSubmateria, String dataInici, String horaInici, String dataFi, String horaFi, String observacions, String lloc, Integer tipusEventAgenda, boolean visibleFamilies);
++    void altaEventActivitatGenerica(String centre, CursAcademic cursAcademic, Long grup, Long arbreEnsenyament, Integer ambit, String dataInici, String horaInici, String dataFi, String horaFi, String observacions, String lloc, Integer tipusEventAgenda, boolean visibleFamilies);
+ 
+ 
+ 
+diff --git a/modules/logica/src/es/caib/xibcen/logica/servei/impl/CentreServiceImpl.java b/modules/logica/src/es/caib/xibcen/logica/servei/impl/CentreServiceImpl.java
+index 03acad37308a42b62d708035c384329354e1541f..1c4f8ff512029daa971b530d5db67d2b65a55fac 100644
+--- a/modules/logica/src/es/caib/xibcen/logica/servei/impl/CentreServiceImpl.java
++++ b/modules/logica/src/es/caib/xibcen/logica/servei/impl/CentreServiceImpl.java
+@@ -23,7 +23,6 @@ import es.caib.xestib.logica.domini.cppe.*;
+ import es.caib.xestib.logica.domini.falta.TipusFaltaGeneracio;
+ import es.caib.xestib.logica.domini.inventari.ElementInventari;
+ import es.caib.xestib.logica.domini.marcatge.IpCentre;
+-import es.caib.xestib.logica.domini.usuari.PerfilUsuariCentre;
+ import es.caib.xestib.logica.servei.ComunicacioService;
+ import es.caib.xestib.logica.servei.DocumentService;
+ import es.caib.xestib.logica.servei.calendari.model.EventSenzillCentre;
+@@ -56,14 +55,17 @@ import es.caib.xibesc.logica.domini.OficinaEscolaritzacio;
+ import es.caib.xibesc.logica.domini.ZonaEscolaritzacio;
+ import es.caib.xibfal.logica.domini.CategoriaSancio;
+ import es.caib.xibfal.logica.domini.PuntsCategoriaCentreAny;
++import es.caib.xibhor.logica.dao.HorariDao;
+ import es.caib.xibhor.logica.domini.horaris.ApartatHorariGeneralCentre;
+ import es.caib.xibhor.logica.domini.horaris.ApartatHorariGeneralCentreId;
++import es.caib.xibhor.logica.domini.horaris.HorariAlumne;
+ import es.caib.xibhor.logica.domini.horaris.HorariMateria;
+ import es.caib.xibimp.logica.domini.Document;
+ import es.caib.xibimp.logica.servei.report.util.ConstantsReports;
++import es.caib.xibmat.logica.dao.GrupDao;
++import es.caib.xibmat.logica.dao.MatriculaDao;
+ import es.caib.xibmat.logica.domini.grup.*;
+ import es.caib.xibmat.logica.domini.matricula.Matricula;
+-import es.caib.xibper.logica.domini.professor.CarrecProfessor;
+ import es.caib.xibper.logica.servei.DestinacioProfessorService;
+ import es.caib.xibtme.logica.domini.agenda.TipusEventAgenda;
+ import es.caib.xibtme.logica.domini.centre.*;
+@@ -113,6 +115,15 @@ public class CentreServiceImpl  implements CentreService {
+     @Autowired
+     private DocumentService documentService;
+ 
++    @Autowired
++    private HorariDao horariDao;
++
++    @Autowired
++    private MatriculaDao matriculaDao;
++
++    @Autowired
++    private GrupDao grupDao;
++
+     public Collection<Aula> llistaAulesEdificiCentre(long codiEdifici) {
+         return dao.llistaAulesEdificiCentre(codiEdifici);
+     }
+@@ -1058,7 +1069,15 @@ public class CentreServiceImpl  implements CentreService {
+     }
+ 
+     @Transactional
+-    public void altaEventActivitat(Long codiGrup, Long codiSubmateria, Collection<Alumne> alumnesEvent, String dataInici, String horaInici, String dataFi, String horaFi, String observacions, String lloc, Integer tipusEventAgenda, boolean visibleFamilies) {
++    public void altaEventActivitat(CursAcademic any, String professor, Long codiGrup, Long codiSubmateria, String dataInici, String horaInici, String dataFi, String horaFi, String observacions, String lloc, Integer tipusEventAgenda, boolean visibleFamilies) {
++
++        Collection<Alumne> alumnesEvent = new ArrayList<>();
++        for (HorariAlumne horAlu: horariDao.llistaHorariAlumnatPerProfessor(professor, any)) {
++            if (horAlu.getHorariMateria().getCodi().equals(codiSubmateria)) {
++                alumnesEvent.add(horAlu.getAlumne());
++            }
++        }
++
+         EventAgenda eventAgenda = new EventAgenda();
+ 
+         if (codiGrup!=null) {
+@@ -1092,60 +1111,55 @@ public class CentreServiceImpl  implements CentreService {
+             dao.save(eventAgendaAlumne);
+         }
+     }
++    private static  GeneradorIdentificadorsSegur8 generador = new GeneradorIdentificadorsSegur8();
+ 
+-
+-    @Transactional
+-    public void altaEventActivitatGenerica(Centre centre, CursAcademic cursAcademic, Grup grup, ArbreEnsenyament arbreEnsenyament, Integer ambit, Collection<Matricula> matriculesEvent, String dataInici, String horaInici, String dataFi, String horaFi, String observacions, String lloc, Integer tipusEventAgenda, boolean visibleFamilies) {
+-
+-
+-//        System.out.println("altaEventActivitatGenerica>> ambit="+ambit +" grup="+ (grup!=null?grup.getCodi():"null")+ " arbreEnsenyament="+ (arbreEnsenyament!=null?arbreEnsenyament.getCodiArbreEnsenyament():"null"));
++    private void altaEventActivitatGenericaGrup(Grup grup, Date dataInici, Date dataFi,String observacions, String lloc, Integer tipusEventAgenda, boolean visibleFamilies){
+         EventAgenda eventAgenda = new EventAgenda();
+-        eventAgenda.setCentre(centre);
+-        eventAgenda.setAny(cursAcademic);
+-
+-        if (ambit==EventSenzillCentre.EVENT_GRUP){
+-            if (grup!=null) {
+-                eventAgenda.setGrup(grup);
+-                eventAgenda.setCodiArbreEnsenyament(null);
+-            }
+-        }
+-
+-        if (ambit==EventSenzillCentre.EVENT_CURS || ambit== EventSenzillCentre.EVENT_ENSENYAMENT){
+-            eventAgenda.setGrup(null);
+-            if (arbreEnsenyament!=null) {
+-                eventAgenda.setCodiArbreEnsenyament(arbreEnsenyament.getCodiArbreEnsenyament());
+-            }
+-
+-        }
+-        if (ambit==EventSenzillCentre.EVENT_CENTRE){
+-            eventAgenda.setGrup(null);
+-            eventAgenda.setCodiArbreEnsenyament(ArbreEnsenyament.CODI_ARREL);
+-        }
+-
++        eventAgenda.setCentre(grup.getCentre());
++        eventAgenda.setAny(grup.getAny());
++        eventAgenda.setGrup(grup);
++        eventAgenda.setCodiArbreEnsenyament(null);
+         eventAgenda.setTipusEventAgenda(dao.load(TipusEventAgenda.class, tipusEventAgenda));
+         eventAgenda.setObservacions(observacions);
+-        eventAgenda.setDataInici(UtilData.parseData(dataInici + " " + horaInici, "dd/MM/yyyy HH:mm"));
++        eventAgenda.setDataInici(dataInici);
+         eventAgenda.setLloc(lloc);
+         eventAgenda.setVisibleFamilies(visibleFamilies);
+-        if(dataFi != null) {
+-            eventAgenda.setDataFi(UtilData.parseData(dataFi + " " + horaFi, "dd/MM/yyyy HH:mm"));
+-        }
+-
+-        Set<EventAgendaAlumne> setEventAlumne  =new LinkedHashSet<>(matriculesEvent.size());
++        eventAgenda.setDataFi(dataFi);
++        eventAgenda.setGrupEvents(generador.generate());
+         dao.save(eventAgenda);
+-        for (Matricula  matricula: matriculesEvent) {
+-//            System.out.println("altaEventActivitatGenerica>> matricula="+matricula.getAlumne().getCodi());
++        Collection<Matricula> matricules = matriculaDao.llistaMatriculesPerGrup(grup.getCodi());
++        for (Matricula  matricula: matricules) {
+             EventAgendaAlumneId eventAgendaAlumneId = new EventAgendaAlumneId(eventAgenda.getCodi(), matricula.getAlumne().getCodi());
+             EventAgendaAlumne eventAgendaAlumne = new EventAgendaAlumne(eventAgendaAlumneId);
+-            setEventAlumne.add(eventAgendaAlumne);
++            dao.save(eventAgendaAlumne);
+         }
+-//        System.out.println("***** Nou event >> codi event="+eventAgenda.getCodi() + " grup="+ (grup!=null?grup.getCodi():"null") + " arbreEnsenyament="+ (arbreEnsenyament!=null?arbreEnsenyament.getCodiArbreEnsenyament():"null")+  " num matricules="+matriculesEvent.size());
++    }
+ 
+-        eventAgenda.setEventAlumne(setEventAlumne);
++    @Transactional
++    public void altaEventActivitatGenerica(String centre, CursAcademic cursAcademic, Long codiGrup, Long arbreEnsenyament, Integer ambit, String dataInici, String horaInici, String dataFi, String horaFi, String observacions, String lloc, Integer tipusEventAgenda, boolean visibleFamilies) {
+ 
+-        for (EventAgendaAlumne eventAgendaAlumne:setEventAlumne){
+-            dao.save(eventAgendaAlumne);
++        Date inici = UtilData.parseData(dataInici + " " + horaInici, "dd/MM/yyyy HH:mm");
++        Date fi = null;
++        if(dataFi != null) {
++            fi = UtilData.parseData(dataFi + " " + horaFi, "dd/MM/yyyy HH:mm");
+         }
++        if (ambit == EventSenzillCentre.EVENT_GRUP){
++            Grup grup = dao.get(Grup.class, codiGrup);
++            altaEventActivitatGenericaGrup(grup,inici, fi,observacions,lloc,tipusEventAgenda,visibleFamilies);
++        } else if (ambit==EventSenzillCentre.EVENT_CURS) {
++            for (Grup g : grupDao.llistaGrups(arbreEnsenyament,cursAcademic,centre)) {
++                altaEventActivitatGenericaGrup(g, inici, fi, observacions, lloc, tipusEventAgenda, visibleFamilies);
++            }
++        } else if (ambit== EventSenzillCentre.EVENT_ENSENYAMENT){
++            for (Grup g : grupDao.llistaGrupsDeEstudis(cursAcademic,centre,arbreEnsenyament)) {
++                altaEventActivitatGenericaGrup(g, inici, fi, observacions, lloc, tipusEventAgenda, visibleFamilies);
++            }
++        } else if (ambit== EventSenzillCentre.EVENT_CENTRE){
++            for (Grup g : grupDao.llistaGrupsCentre(cursAcademic,centre)) {
++                altaEventActivitatGenericaGrup(g, inici, fi, observacions, lloc, tipusEventAgenda, visibleFamilies);
++            }
++        }
++
+     }
+ 
+ 
+diff --git a/modules/logica/src/es/caib/xibimp/logica/servei/impl/DocumentAvaluacioServiceImpl.java b/modules/logica/src/es/caib/xibimp/logica/servei/impl/DocumentAvaluacioServiceImpl.java
+index f1881b5d63b8e3da87af276d70292fede8b2c1a5..40d897ce978c676772bfaa6cebe0fc7ebdbb3706 100644
+--- a/modules/logica/src/es/caib/xibimp/logica/servei/impl/DocumentAvaluacioServiceImpl.java
++++ b/modules/logica/src/es/caib/xibimp/logica/servei/impl/DocumentAvaluacioServiceImpl.java
+@@ -950,7 +950,7 @@ public class DocumentAvaluacioServiceImpl implements DocumentAvaluacioService {
+                                 + (matriculaHonor.getAlumne().getPersona().getNom().getLlinatge2() != null ? matriculaHonor.getAlumne().getPersona().getNom().getLlinatge2() : "")
+                                 + " (" + (matriculaHonor.getAlumne().getPersona().getIdentificacio() != null ? matriculaHonor.getAlumne().getPersona().getIdentificacio() : "")
+                                 + ") - " + matriculaHonor.getCentre().getNomITipus() + ""
+-                                + " Any. Acad. " + matriculaHonor.getAny().getAnyAcademicLlarg();
++                                + " Any Acad. " + matriculaHonor.getAny().getAnyAcademicLlarg() + ".pdf";
+ 
+                         Persona personaRemitent = personaDao.obtePersona(ContexteSeguretat.obteUsername());
+                         String codiPersonaRemitent = personaRemitent.getCodi();
+diff --git a/modules/logica/src/es/caib/xibimp/logica/servei/report/CertificatMatriculaHonorDocument.java b/modules/logica/src/es/caib/xibimp/logica/servei/report/CertificatMatriculaHonorDocument.java
+index e9839c7e28f560db628249d7024207e89d3aed2d..6d7abf8bc7aec222e473ad95a70a6c3688f87f09 100644
+--- a/modules/logica/src/es/caib/xibimp/logica/servei/report/CertificatMatriculaHonorDocument.java
++++ b/modules/logica/src/es/caib/xibimp/logica/servei/report/CertificatMatriculaHonorDocument.java
+@@ -15,23 +15,21 @@ import java.util.Date;
+ public class CertificatMatriculaHonorDocument extends DocumentPdfPageEventXestib {
+ 
+     private Matricula matriculaHonor;
+-//    private Boolean enviarSignaturaDigital;
+     private String descripcioPersonaResponsableSignatura;
+ 
+-    private static final String NORMATIVA_CA = "1. Que d'acord amb la dades que consten a l'expedient acadèmic de l'alumne i d'acord amb la Disposició addicional sisena del Reial decret 1105/2014, de 26 de desembre, pel qual s'estableix el currículum bàsic de l'educació secundària obligatòria i del batxillerat i la Resolució del director general de Planificació, Ordenació i Centre de 13 de novembre de 2019 per la qual s'aproven les instruccions per avaluar l'aprenentatge dels alumnes del batxillerat a les Illes Balears per al curs %s,";
+-    private static final String NORMATIVA_ES = "1. Que de acuerdo con los datos que figuran en el expediente académico del alumno y de acuerdo con la Disposición adicional sexta del Real decreto 1105/2014, de 26 de diciembre, por el que se establece el currículo básico de Educación Secundaria Obligatoria y del Bachillerato y la Resolució del director general de Planificación, Ordenación y Centros de 13 de noviembre de 2019 por la que se aprueban las instrucciones para evaluar el aprenendizaje de los alumnos del Bachillerato en las Illes Balears para el curso %s,";
+-    private static final String DADES_MATRICULA = ", amb/con DNI ";
+-    private static final String MATRICULA_HONOR_LITERAL_CA_1 = "ha obtingut ";
+-    private static final String MATRICULA_HONOR_LITERAL_CA_2 = "Matrícula d'Honor ";
+-    private static final String MATRICULA_HONOR_LITERAL_CA_3 = "a l'etapa de batxillerat amb nota mitjana de ";
+-    private static final String MATRICULA_HONOR_LITERAL_ES_1 = "ha obtenido ";
+-    private static final String MATRICULA_HONOR_LITERAL_ES_2 = "Matrícula de Honor ";
+-    private static final String MATRICULA_HONOR_LITERAL_ES_3 = "en la etapa de bachillerato con nota media de ";
++    private static final String NORMATIVA_CA = "Que, d’acord amb la disposició addicional sisena del Reial decret 1105/2014, de 26 de desembre, pel qual s’estableix el currículum bàsic de l’educació secundària obligatòria i del batxillerat, i l’apartat 23.6 de l’annex 1 de la Resolució del director general de Planificació, Ordenació i Centres de 19 d’octubre de 2020 per la qual s’aproven les instruccions per avaluar l’aprenentatge dels alumnes del batxillerat a les Illes Balears per al curs %s,";
++    private static final String NORMATIVA_ES = "Que, de acuerdo con la disposición adicional sexta del Real Decreto 1105/2014, de 26 de diciembre, por el que se establece el currículo básico de la Educación Secundaria Obligatoria y del Bachillerato, y el apartado 23.6 del anexo 1 de la Resolución del director general de Planificación, Ordenación y Centros de 19 de octubre de 2020 por la que se aprueban las instrucciones para evaluar el aprendizaje de los alumnos de bachillerato en las Illes Balears para el curso 2020-2021 %s,";
++    private static final String MATRICULA_HONOR_LITERAL_CA_1 = "amb el document d'identitat ";
++    private static final String MATRICULA_HONOR_LITERAL_CA_2 = ", ha obtingut Matrícula d'Honor de batxillerat el curs %s, amb una nota mitjana de ";
++//    private static final String MATRICULA_HONOR_LITERAL_CA_3 = "";
++    private static final String MATRICULA_HONOR_LITERAL_ES_1 = "con el documento de identidad ";
++    private static final String MATRICULA_HONOR_LITERAL_ES_2 = ", ha obtenido Matrícula de Honor de bachillerato el curso %s, con una nota media de ";
++//    private static final String MATRICULA_HONOR_LITERAL_ES_3 = "";
+     private static final String MATRICULA_HONOR_CONSTI_CA = "I, porquè consti, expedesc aquest certificat amb caràcter oficial i validesa en tot el territori nacional.";
+     private static final String MATRICULA_HONOR_CONSTI_ES = "Y, para que conste, expido este certificado con carácter oficial y validez en todo el territorio nacional.";
+-    private static final String DIRECCIO_CARRER = "C. del Ter, 16 (Edifici \"Alexandre Rosselló i Pastors\")";
++    private static final String DIRECCIO_CARRER = "C. del Ter, 16 4t";
+     private static final String DIRECCIO_CP = "07009 Polígon Son Fuster (Palma)";
+-    private static final String TELEFON = "971 17 78 00";
++    private static final String TELEFON = "971 17 77 55";
+     private static final String URL = "educaciouniversitat.caib.es";
+ 
+     private static final DateFormat SDF = new SimpleDateFormat("dd ' de ' MMMMMMMMMMMMMM ' de ' yyyy");
+@@ -45,9 +43,7 @@ public class CertificatMatriculaHonorDocument extends DocumentPdfPageEventXestib
+         super.setPdfMargins(25, 25, 25, 20);
+ 
+         this.matriculaHonor = matriculaHonor;
+-//        this.enviarSignaturaDigital = enviarSignaturaDigital;
+         if (!enviarSignaturaDigital) addWatermarkText("SENSE SIGNATURA DIGITAL");
+-//        else addWatermarkImage(); //TODO falta hacer la imagen al agua al fondo del documento
+         this.descripcioPersonaResponsableSignatura = descripcioPersonaResponsableSignatura;
+     }
+ 
+@@ -153,18 +149,18 @@ public class CertificatMatriculaHonorDocument extends DocumentPdfPageEventXestib
+     }
+ 
+     private PdfPCell getMatriculaHonorCa() {
+-        return getMatriculaHonor(MATRICULA_HONOR_LITERAL_CA_1, MATRICULA_HONOR_LITERAL_CA_2, MATRICULA_HONOR_LITERAL_CA_3);
++        return getMatriculaHonor(MATRICULA_HONOR_LITERAL_CA_1, MATRICULA_HONOR_LITERAL_CA_2);
+     }
+ 
+     private PdfPCell getMatriculaHonorEs() {
+-        return getMatriculaHonor(MATRICULA_HONOR_LITERAL_ES_1, MATRICULA_HONOR_LITERAL_ES_2, MATRICULA_HONOR_LITERAL_ES_3);
++        return getMatriculaHonor(MATRICULA_HONOR_LITERAL_ES_1, MATRICULA_HONOR_LITERAL_ES_2);
+     }
+ 
+-    private PdfPCell getMatriculaHonor(String matriculaHonorLiteral1, String matriculaHonorLiteral2, String matriculaHonorLiteral3) {
++    private PdfPCell getMatriculaHonor(String matriculaHonorLiteral1, String matriculaHonorLiteral2) {
+         Paragraph paragraphCa = new Paragraph();
+         paragraphCa.add(new Phrase(matriculaHonorLiteral1, ConstantsReports.FONT_TEXTE_12));
+-        paragraphCa.add(new Phrase(matriculaHonorLiteral2, ConstantsReports.FONT_TEXTE_NEGRETA_12));
+-        paragraphCa.add(new Phrase(matriculaHonorLiteral3, ConstantsReports.FONT_TEXTE_12));
++        paragraphCa.add(new Phrase(matriculaHonor.getAlumne().getPersona().getIdentificacio(), ConstantsReports.FONT_TEXTE_NEGRETA_12));
++        paragraphCa.add(new Phrase(String.format(matriculaHonorLiteral2, matriculaHonor.getAny().getAnyAcademicLlarg()), ConstantsReports.FONT_TEXTE_12));
+         PdfPCell pCellCa = new PdfPCell(paragraphCa);
+         pCellCa.setHorizontalAlignment(Element.ALIGN_JUSTIFIED);
+         pCellCa.setBorder(Rectangle.NO_BORDER);
+@@ -181,8 +177,8 @@ public class CertificatMatriculaHonorDocument extends DocumentPdfPageEventXestib
+ 
+         Paragraph paragraph = new Paragraph();
+         paragraph.add(new Phrase(nomComplet, ConstantsReports.FONT_TEXTE_NEGRETA_12));
+-        paragraph.add(new Phrase(DADES_MATRICULA, ConstantsReports.FONT_TEXTE_12));
+-        paragraph.add(new Phrase(matriculaHonor.getAlumne().getPersona().getIdentificacio(), ConstantsReports.FONT_TEXTE_NEGRETA_12));
++//        paragraph.add(new Phrase(DADES_MATRICULA, ConstantsReports.FONT_TEXTE_12));
++//        paragraph.add(new Phrase(matriculaHonor.getAlumne().getPersona().getIdentificacio(), ConstantsReports.FONT_TEXTE_NEGRETA_12));
+         PdfPCell pCell = new PdfPCell(paragraph);
+         pCell.setHorizontalAlignment(Element.ALIGN_CENTER);
+         pCell.setBorder(Rectangle.NO_BORDER);
+diff --git a/modules/logica/src/es/caib/xibimp/logica/servei/report/MatriculaAdscripcioDocument.java b/modules/logica/src/es/caib/xibimp/logica/servei/report/MatriculaAdscripcioDocument.java
+index 7063212aecb61dcae4cadd1691c2c3058c4ac3df..9aa05de99e20bf45e6fcb36a971939018330efaa 100644
+--- a/modules/logica/src/es/caib/xibimp/logica/servei/report/MatriculaAdscripcioDocument.java
++++ b/modules/logica/src/es/caib/xibimp/logica/servei/report/MatriculaAdscripcioDocument.java
+@@ -169,7 +169,7 @@ public class MatriculaAdscripcioDocument extends DocumentPdfPageEventXestib {
+         });
+ 
+ 
+-        final Ordering<String> ordreCursos = Ordering.explicit("Primer", "Segon", "Tercer", "Quart", "Cinquè", "Sisè");
++        final Ordering<String> ordreCursos = Ordering.explicit("Primer", "1r", "Segon","2n", "Tercer","3r", "Quart","4t", "Cinquè","5è", "Sisè","6è");
+ 
+         Table<Tupla<String, String>, String, Integer> table = TreeBasedTable.create(
+                 new Comparator<Tupla<String, String>>() {
+diff --git a/modules/logica/src/es/caib/xibimp/logica/servei/report/util/I18N/I18NGeneraExcel_ca.java b/modules/logica/src/es/caib/xibimp/logica/servei/report/util/I18N/I18NGeneraExcel_ca.java
+index bad04801bbd698e752e52618108dfc279b7876e6..1b6aa30705497ec70b27ce58ad70d0a5fa3dd7fb 100644
+--- a/modules/logica/src/es/caib/xibimp/logica/servei/report/util/I18N/I18NGeneraExcel_ca.java
++++ b/modules/logica/src/es/caib/xibimp/logica/servei/report/util/I18N/I18NGeneraExcel_ca.java
+@@ -86,7 +86,11 @@ public class I18NGeneraExcel_ca extends ListResourceBundle {
+             {"eti.email", "Correu electrònic"},
+             {"eti.dadesCoordinador", "Dades coordinador"},
+             {"eti.carrec", "Càrrec"},
++            {"eti.codiEstat", "Codi estat"},
++            {"eti.veDe", "Ve de"},
++            {"eti.continuaA", "Continua a"},
+             {"eti.estat", "Estat"},
++            {"eti.dataBaixa", "Data baixa"},
+             {"eti.dataNomenament", "Data nomenament"},
+             {"eti.dataCessament", "Data cessament"},
+             {"eti.dataCreacio", "Data creació"},
+diff --git a/modules/logica/src/es/caib/xibimp/logica/servei/report/util/I18N/I18NGeneraExcel_es.java b/modules/logica/src/es/caib/xibimp/logica/servei/report/util/I18N/I18NGeneraExcel_es.java
+index 19950b17d4d47c05e26cf87d621c860e30039b0d..81ed2bb4f0edb20128c52895db7e43ffe307fdec 100644
+--- a/modules/logica/src/es/caib/xibimp/logica/servei/report/util/I18N/I18NGeneraExcel_es.java
++++ b/modules/logica/src/es/caib/xibimp/logica/servei/report/util/I18N/I18NGeneraExcel_es.java
+@@ -87,7 +87,11 @@ public class I18NGeneraExcel_es extends ListResourceBundle {
+             {"eti.email", "Correo electrónico"},
+             {"eti.dadesCoordinador", "Datos coordinador"},
+             {"eti.carrec", "Cargo"},
++            {"eti.codiEstat", "Código estado"},
++            {"eti.veDe", "Viene de"},
++            {"eti.continuaA", "Continua en"},
+             {"eti.estat", "Estado"},
++            {"eti.dataBaixa", "Fecha baja"},
+             {"eti.dataNomenament", "Fecha nombramiento"},
+             {"eti.dataCessament", "Fecha cese"},
+             {"eti.dataCreacio", "Fecha creación"},
+diff --git a/modules/sessionFactory/hibernate/es/caib/xibmat/logica/domini/grup/EventAgenda.hbm.xml b/modules/sessionFactory/hibernate/es/caib/xibmat/logica/domini/grup/EventAgenda.hbm.xml
+index 53a98bb95fedd8c7e05af43b1af230a3a375a1a8..3b586300e37278c486781c54e94d858a0f44c498 100644
+--- a/modules/sessionFactory/hibernate/es/caib/xibmat/logica/domini/grup/EventAgenda.hbm.xml
++++ b/modules/sessionFactory/hibernate/es/caib/xibmat/logica/domini/grup/EventAgenda.hbm.xml
+@@ -38,7 +38,7 @@
+         <property name="lloc" column="AEV_LLOC" />
+         <property name="visibleFamilies" column="AEV_VISIBLEFAMILIES" />
+ 
+-        <!--<property name="grupEvents" column="AEV_VISIBLEFAMILIES" />-->
++        <property name="grupEvents" column="AEV_IDGRUP" />
+ 
+         <many-to-one
+                 name="centre"
+diff --git a/modules/www/src/es/caib/xestib/www/controladors/activitats/ControladorActivitats.java b/modules/www/src/es/caib/xestib/www/controladors/activitats/ControladorActivitats.java
+index 51804b62c7763b7b7cc5bf73ff9a439c08d41cc4..40f2ff177b731d5ef34b1168572df2332138c5c5 100644
+--- a/modules/www/src/es/caib/xestib/www/controladors/activitats/ControladorActivitats.java
++++ b/modules/www/src/es/caib/xestib/www/controladors/activitats/ControladorActivitats.java
+@@ -14,7 +14,6 @@ import es.caib.xestib.util.Entorn;
+ import es.caib.xestib.www.controladors.ControlUs;
+ import es.caib.xestib.www.filtre.FiltreConfiguracio;
+ import es.caib.xestib.www.model.arbreEnsenyament.EstructuraEnsenyamentCentre;
+-import es.caib.xibalu.logica.domini.persona.Alumne;
+ import es.caib.xibalu.logica.domini.persona.Persona;
+ import es.caib.xibarb.logica.domini.ensenyament.ArbreEnsenyament;
+ import es.caib.xibarb.logica.servei.ArbreEnsenyamentService;
+@@ -271,58 +270,24 @@ public class ControladorActivitats {
+         logger.log(Entorn.NIVELL_LOG, grup.toString());
+         CursAcademic cursAcademic = grup.getAny();
+         Centre centre=grup.getCentre();
+-        ArbreEnsenyament curs=arbreEnsenyamentService.obtenirAscendentPerTipus(cursAcademic,grup.getCodiArbre(), TipusArbreEnsenyament.CODI_CURS);
+-        logger.log(Entorn.NIVELL_LOG, curs.getId().toString()+curs.getCodiArbreEnsenyament()+ "  "+ curs.getTraduccio("ca").getNom());
+-        ArbreEnsenyament ens=arbreEnsenyamentService.obtenirAscendentPerTipus(cursAcademic,curs.getCodiArbreEnsenyament(), TipusArbreEnsenyament.CODI_ENSENYAMENT);
+-        List <Grup> llistaGrups=new LinkedList<>();
+-        List<Matricula> matricules =new LinkedList<>();
+         switch (activitatGenerica){
+             case "genericaMateria":
+-                Collection<Alumne> alumnesEvent = new ArrayList<>();
+-                for (HorariAlumne horAlu: horariService.llistaHorariAlumnatPerProfessor(professor.getCodi(), cursAcademic)) {
+-                    if (horAlu.getHorariMateria().getCodi().equals(codiSubmateria)) {
+-                        alumnesEvent.add(horAlu.getAlumne());
+-                    }
+-                }
+-                centreService.altaEventActivitat(grup.getCodi(), codiSubmateria, alumnesEvent, dataInici, horaInici, dataInici, horaFi, observacions, lloc, tipusEventAgenda,visibleFamilies);
++                centreService.altaEventActivitat(cursAcademic , professor.getCodi(), grup.getCodi(), codiSubmateria, dataInici, horaInici, dataInici, horaFi, observacions, lloc, tipusEventAgenda, visibleFamilies);
+                 break;
+             case "genericaGrup":
+-                 matricules = matriculaService.llistaMatriculesPerGrup(grup.getCodi());
+-                logger.log(Entorn.NIVELL_LOG, "alta activitat genericaGrup>> codiGrup=" +grup.getCodi()+" "+grup.toString()+" num matricules="+matricules.size());
+-                centreService.altaEventActivitatGenerica(centre, cursAcademic, grup, null, EventSenzillCentre.EVENT_GRUP,  matricules, dataInici, horaInici, dataInici, horaFi, observacions, lloc, tipusEventAgenda, visibleFamilies);
++                centreService.altaEventActivitatGenerica(centre.getCodi(), cursAcademic, grup.getCodi(), null, EventSenzillCentre.EVENT_GRUP, dataInici, horaInici, dataInici, horaFi, observacions, lloc, tipusEventAgenda, visibleFamilies);
+                 break;
+ 
+             case "genericaCurs":
+-                llistaGrups.addAll(grupService.llistaGrups(curs.getCodiArbreEnsenyament(),cursAcademic,centre.getCodi()));
+-                logger.log(Entorn.NIVELL_LOG, "alta activitat genericaCurs>> " + curs.getId().toString()+curs.getCodiArbreEnsenyament()+ "  "+ curs.getTraduccio("ca").getNom());
+-                for (Grup grup1 : llistaGrups) {
+-                    matricules.addAll( matriculaService.llistaMatriculesPerGrup(grup1.getCodi()));
+-                    logger.log(Entorn.NIVELL_LOG, "alta activitat genericaCurs>> codiGrup=" + grup1.getCodi()+" "+grup1.toString()+" num matricules="+matricules.size());
+-
+-                }
+-                logger.log(Entorn.NIVELL_LOG, " num matricules="+matricules.size());
+-                centreService.altaEventActivitatGenerica(centre, cursAcademic, null, curs, EventSenzillCentre.EVENT_CURS, matricules, dataInici, horaInici, dataInici, horaFi, observacions, lloc, tipusEventAgenda, visibleFamilies);
++                ArbreEnsenyament curs=arbreEnsenyamentService.obtenirAscendentPerTipus(cursAcademic,grup.getCodiArbre(), TipusArbreEnsenyament.CODI_CURS);
++                centreService.altaEventActivitatGenerica(centre.getCodi(), cursAcademic, null, curs.getCodiArbreEnsenyament(), EventSenzillCentre.EVENT_CURS, dataInici, horaInici, dataInici, horaFi, observacions, lloc, tipusEventAgenda, visibleFamilies);
+                 break;
+             case "genericaEns":
+-                llistaGrups.addAll(grupService.llistaGrupsDeEstudis(cursAcademic,centre.getCodi(),ens.getCodiArbreEnsenyament()));
+-                logger.log(Entorn.NIVELL_LOG, "alta activitat genericaEns>> " + ens.getId().toString()+ens.getCodiArbreEnsenyament()+ "  "+ ens.getTraduccio("ca").getNom());
+-                for (Grup grup1 : llistaGrups) {
+-                    matricules.addAll( matriculaService.llistaMatriculesPerGrup(grup1.getCodi()));
+-                    logger.log(Entorn.NIVELL_LOG, "alta activitat genericaEns>> codiGrup=" + grup1.getCodi()+" "+grup1.toString()+" num matricules="+matricules.size());
+-
+-                }
+-                logger.log(Entorn.NIVELL_LOG, " num matricules="+matricules.size());
+-                centreService.altaEventActivitatGenerica(centre, cursAcademic, null, ens, EventSenzillCentre.EVENT_ENSENYAMENT, matricules, dataInici, horaInici, dataInici, horaFi, observacions, lloc, tipusEventAgenda, visibleFamilies);
++                ArbreEnsenyament ens=arbreEnsenyamentService.obtenirAscendentPerTipus(cursAcademic,grup.getCodiArbre(), TipusArbreEnsenyament.CODI_ENSENYAMENT);
++                centreService.altaEventActivitatGenerica(centre.getCodi(), cursAcademic, null, ens.getCodiArbreEnsenyament(), EventSenzillCentre.EVENT_ENSENYAMENT, dataInici, horaInici, dataInici, horaFi, observacions, lloc, tipusEventAgenda, visibleFamilies);
+                 break;
+             case "genericaCentre":
+-                logger.log(Entorn.NIVELL_LOG,"alta activitat genericaCentre> genericaCentre");
+-                llistaGrups.addAll(grupService.llistaGrupsCentre(cursAcademic,centre.getCodi()).keySet());
+-                for (Grup grup1 : llistaGrups) {
+-                    matricules.addAll( matriculaService.llistaMatriculesPerGrup(grup1.getCodi()));
+-                }
+-                logger.log(Entorn.NIVELL_LOG, " num matricules="+matricules.size());
+-                centreService.altaEventActivitatGenerica(centre, cursAcademic, null,null , EventSenzillCentre.EVENT_CENTRE, matricules, dataInici, horaInici, dataInici, horaFi, observacions, lloc, tipusEventAgenda, visibleFamilies);
+-
++                centreService.altaEventActivitatGenerica(centre.getCodi(), cursAcademic, null,null , EventSenzillCentre.EVENT_CENTRE, dataInici, horaInici, dataInici, horaFi, observacions, lloc, tipusEventAgenda, visibleFamilies);
+                 break;
+         }
+ 
+diff --git a/modules/www/src/es/caib/xestib/www/controladors/calendari/ControladorCalendari.java b/modules/www/src/es/caib/xestib/www/controladors/calendari/ControladorCalendari.java
+index 5642682019777758fd9761bde42ba893ef4080ca..10f0a69b849053ae9f06bdf81d4d2b19b9df01e3 100644
+--- a/modules/www/src/es/caib/xestib/www/controladors/calendari/ControladorCalendari.java
++++ b/modules/www/src/es/caib/xestib/www/controladors/calendari/ControladorCalendari.java
+@@ -1199,9 +1199,10 @@ public class ControladorCalendari {
+         } else {
+             nomEvent=event.getObservacions() ;
+         }
+-
+-        return new EventSenzillActivitat(nomEvent, event.getDataInici(), event.getDataFi(), detall, event.getLloc(), codiTipusEvent,
+-                        codiMateria, nomSubmateria, nomProfessor, codiGrupSegur, nomGrup, enUsAltreGrup, alumnesGrup, nomEns, new EventId(EventAgenda.class, event.getCodi()), codiSubMateria, event.isVisibleFamilies());
++        EventSenzillActivitat e = new EventSenzillActivitat(nomEvent, event.getDataInici(), event.getDataFi(), detall, event.getLloc(), codiTipusEvent,
++                codiMateria, nomSubmateria, nomProfessor, codiGrupSegur, nomGrup, enUsAltreGrup, alumnesGrup, nomEns, new EventId(EventAgenda.class, event.getCodi()), codiSubMateria, event.isVisibleFamilies());
++        e.setIdGrupEvent(event.getGrupEvents());
++        return e;
+     }
+ 
+     private EventSenzillCentre getNomEventSenzillActivitatCentre(EventAgenda event, boolean concatenar) {
+diff --git a/modules/www/src/es/caib/xestib/www/controladors/control/ControladorControl.java b/modules/www/src/es/caib/xestib/www/controladors/control/ControladorControl.java
+index c44713380263b13a7ebd8f0591cc383819b444fb..50864ffc9ed0fddf49d34273c4de506edcb416d3 100644
+--- a/modules/www/src/es/caib/xestib/www/controladors/control/ControladorControl.java
++++ b/modules/www/src/es/caib/xestib/www/controladors/control/ControladorControl.java
+@@ -17,6 +17,7 @@ import es.caib.xestib.www.servlet.configuracio.InformaDesplegamentContextListene
+ import es.caib.xestib.www.util.DadesVisualitzaPersona;
+ import es.caib.xibalu.logica.domini.persona.Persona;
+ import es.caib.xibalu.logica.servei.PersonaService;
++import es.caib.xibimp.logica.domini.Document;
+ import es.caib.xibmat.logica.servei.MatriculaService;
+ import es.caib.xibper.logica.domini.personalNoDocent.DestinacioPersonalNoDocent;
+ import es.caib.xibper.logica.domini.professor.DestinacioProfessor;
+@@ -30,6 +31,7 @@ import org.apache.log4j.Logger;
+ import org.springframework.beans.factory.annotation.Autowired;
+ import org.springframework.stereotype.Controller;
+ import org.springframework.ui.Model;
++import org.springframework.util.StringUtils;
+ import org.springframework.web.bind.annotation.*;
+ import javax.management.*;
+ import javax.servlet.Servlet;
+@@ -62,7 +64,8 @@ public class ControladorControl {
+     private TasquesService tasquesService;
+     @Autowired
+     private EnviadorEmail enviadorEmail;
+-
++    @Autowired
++    private DocumentService documentService;
+ 
+     private static final Level[] NIVELLS = {
+             Level.ALL,
+@@ -187,6 +190,18 @@ public class ControladorControl {
+         return "Enviat : " + textEmail + " a " + to;
+     }
+ 
++    @RequestMapping("emailHtml")
++    @ResponseBody
++    public String enviaEmailHtml (String to, String html, @RequestParam(required = false) String codiDocument){
++
++        Document document = null;
++        if (StringUtils.hasText(codiDocument)) {
++            document = documentService.carregaDocument(codiDocument);
++        }
++        boolean ok = enviadorEmail.testEnviaEmailHtml("test html", to, html, document);
++        return "Enviat : a " + to + " ok? " + ok;
++    }
++
+     @RequestMapping(value="infoServidors", method = RequestMethod.GET)
+     public String infoServidors(HttpServletRequest request,Model model) {
+         model.addAttribute("nodeActual", ControladorGestioAcademica.getIdNode(request));
+diff --git a/modules/www/src/es/caib/xestib/www/controladors/external/ControladorExternal.java b/modules/www/src/es/caib/xestib/www/controladors/external/ControladorExternal.java
+index 8721fa00ae254f62b70257e552d5805902b5f858..6f91f2180db518aeb8c9676c87bd7ae80b587f7d 100644
+--- a/modules/www/src/es/caib/xestib/www/controladors/external/ControladorExternal.java
++++ b/modules/www/src/es/caib/xestib/www/controladors/external/ControladorExternal.java
+@@ -1121,7 +1121,7 @@ public class
+     }
+ 
+     @RequestMapping(value="escolaritzacio/resultatTutorProces", method = RequestMethod.POST) //No importa l'extensió (.xml o .html)
+-    public String resultatTutorProces(Model model, HttpSession sessio,
++    public String resultatTutorProces(Model model, HttpServletRequest request,
+                                       @RequestParam (required=false) String dataNaixement,
+                                       @RequestParam (required=false) String idAlumne,
+                                       @RequestParam (required=false) String idTutor,
+@@ -1150,10 +1150,18 @@ public class
+ 
+         /* Fi modificacio */
+ 
+-        Boolean consultaExternaDeshabilitada = ("1".equals(configuracioService.obtenirParametre("consultaExternaDeshabilitada")));
++        boolean consultaExternaDeshabilitada = ("1".equals(configuracioService.obtenirParametre("consultaExternaDeshabilitada")));
++
++        HttpSession sessio = request.getSession(false);
++        String idiomaWebFamilies = null;
++        Persona personaAutenticada = null;
++        if (sessio != null) {
++            idiomaWebFamilies =  (String)sessio.getAttribute("idioma_web_families");
++            personaAutenticada = FiltreConfiguracioFamilies.obtePersona(sessio);
++        }
+ 
+         if (Strings.isNullOrEmpty(idioma)) {
+-            idioma = (String)sessio.getAttribute("idioma_web_families");
++            idioma = idiomaWebFamilies;
+         }
+ 
+         Date dataNaix = UtilData.creaData(dataNaixement);
+@@ -1184,7 +1192,6 @@ public class
+                 List<SolicitudEscolaritzacio> llistaSolicituds;
+                 List<SolicitudEscolaritzacio> llistaSolicitudsCursActual;
+                 if (consultaPerIdAlumne){
+-                    Persona personaAutenticada = FiltreConfiguracioFamilies.obtePersona(sessio);
+                     if (personaAutenticada == null){
+                         model.addAttribute("error", "Sessió finalitzada / sesión finalizada");
+                         return "error.jsp";
+diff --git a/modules/www/src/es/caib/xestib/www/controladors/quadernProfessor/ControladorQuadernProfessor.java b/modules/www/src/es/caib/xestib/www/controladors/quadernProfessor/ControladorQuadernProfessor.java
+index d04dccd23bded3b74a977cad6af3d3383e14aeee..427c8fb1c438cc8ee638ac85a486156807633d0c 100644
+--- a/modules/www/src/es/caib/xestib/www/controladors/quadernProfessor/ControladorQuadernProfessor.java
++++ b/modules/www/src/es/caib/xestib/www/controladors/quadernProfessor/ControladorQuadernProfessor.java
+@@ -1532,9 +1532,13 @@ public class ControladorQuadernProfessor {
+         Persona persona = FiltreConfiguracio.obtePersona(sessio);
+         final List<String> llistaMatricules = Arrays.asList(matricules);
+ 
++        FullQuadern fullQuadern = quadernProfessorService.carregaFulla(codiFull, persona.getCodi());
+ 
+         List<FullQuadernProfessorJson> fulls = new ArrayList<>();
+-        fulls.add(carregaFulla(sessio,codiFull, true, locale));
++        FullQuadernProfessorJson fullJson = carregaFulla(sessio,codiFull, true, locale);
++        fullJson.setAlumnat(obteAlumnat(fullQuadern, locale));
++        fulls.add(fullJson);
++
+         QuadernProfessorat quadern = quadernProfessorService.carregaQuadern(fulls.get(0).getCodiQuadern(), persona.getCodi());
+         if (totsFulls){
+             for (FullQuadern f : quadern.getFulls()){
+@@ -1542,7 +1546,9 @@ public class ControladorQuadernProfessor {
+                 if (f.getCodi().equals(codiFull)){
+                     continue;
+                 }
+-                fulls.add(carregaFulla(sessio,f.getCodi(),true, locale ));
++                fullJson = carregaFulla(sessio,f.getCodi(),true, locale );
++                fullJson.setAlumnat(obteAlumnat(f, locale));
++                fulls.add(fullJson);
+             }
+         }
+         Collections.sort(fulls, new Comparator<FullQuadernProfessorJson>() {
+diff --git a/modules/www/src/es/caib/xestib/www/integracio/EnviadorEmail.java b/modules/www/src/es/caib/xestib/www/integracio/EnviadorEmail.java
+index 973a89bc27c352e30cc47a2119dfb075fb8e7e08..e39aecc46c5d302d3c8e9647e762e7c6b719c4e3 100644
+--- a/modules/www/src/es/caib/xestib/www/integracio/EnviadorEmail.java
++++ b/modules/www/src/es/caib/xestib/www/integracio/EnviadorEmail.java
+@@ -186,6 +186,27 @@ public class EnviadorEmail {
+ 
+     }
+ 
++    public boolean testEnviaEmailHtml(String subject, String to, String textHtml, Document document){
++
++        boolean enviamentOk;
++        try {
++            MimeMessage message = javaMailSender.createMimeMessage();
++            message.setSubject(subject);
++            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
++            helper.setFrom("Gestib");
++            helper.setTo(to);
++            helper.setText(textHtml, true);
++            if (document!=null){
++                helper.addAttachment(document.getNomFitxer(), new File(document.getPath()));
++            }
++            javaMailSender.send(message);
++            enviamentOk = true;
++        } catch (Exception e) {
++            logger.error("error enviant email",e);
++            enviamentOk = false;
++        }
++        return enviamentOk;
++    }
+     public boolean enviaEmailHtml(String subject, String[] to, @Nullable String from, String textHtml, Document document){
+ 
+ 
+diff --git a/modules/www/src/es/caib/xestib/www/model/agendaProfessor/EventJson.java b/modules/www/src/es/caib/xestib/www/model/agendaProfessor/EventJson.java
+index 162478e4d473bb940ac9e6b9eb81ccc66c953258..ba6e514cf93602ace83bef3e07638f3a9e0aeb2b 100644
+--- a/modules/www/src/es/caib/xestib/www/model/agendaProfessor/EventJson.java
++++ b/modules/www/src/es/caib/xestib/www/model/agendaProfessor/EventJson.java
+@@ -112,6 +112,8 @@ public class EventJson {
+     @JsonProperty("class")
+     private String className;
+ 
++    @JsonProperty("idGrupEvent")
++    private String idGrupEvent;
+ 
+ 
+     public static EventJson newInstance(Event event){
+@@ -167,6 +169,7 @@ public class EventJson {
+             e.numAlumnes = objecte.getNumAlumnes();
+             e.observacions = objecte.getObservacions();
+             e.className = "es.caib.xibmat.logica.domini.grup.EventAgenda";
++            e.idGrupEvent = objecte.getIdGrupEvent();
+         } else if (event instanceof EventSenzillCentre) {
+             EventSenzillCentre objecte = (EventSenzillCentre) event;
+             e.codiGrupSegur = objecte.getCodiGrupSegur();
+diff --git a/modules/www/src/es/caib/xestib/www/model/alumne/LlistaSolicitudsPECXLSX.java b/modules/www/src/es/caib/xestib/www/model/alumne/LlistaSolicitudsPECXLSX.java
+index 7f36dbe91e7413cfcbfe1f1641a43125c7cd2fb7..4e46ed9a7deaea121c8784a88ab6f2232ee63b94 100644
+--- a/modules/www/src/es/caib/xestib/www/model/alumne/LlistaSolicitudsPECXLSX.java
++++ b/modules/www/src/es/caib/xestib/www/model/alumne/LlistaSolicitudsPECXLSX.java
+@@ -3,7 +3,6 @@ package es.caib.xestib.www.model.alumne;
+ 
+ import es.caib.xestib.logica.domini.programaEscoCompartida.SolicitudPEC;
+ import es.caib.xibtme.logica.domini.tipus.Idioma;
+-import org.apache.poi.ss.usermodel.Cell;
+ import org.apache.poi.xssf.usermodel.*;
+ 
+ import java.text.SimpleDateFormat;
+@@ -16,11 +15,11 @@ public class LlistaSolicitudsPECXLSX {
+ 
+     private XSSFWorkbook libro;
+     private XSSFSheet hoja;
+-    private XSSFRow[] filesCapcalera;
+     private XSSFFont negreta;
+-    private XSSFCellStyle estilCapcalera, estilNormal;
++    private XSSFCellStyle estilCapcalera, estilNormal, estilNormalNum;
+ 
+     private SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
++    private SimpleDateFormat sdfDMY = new SimpleDateFormat("dd/MM/yyyy");
+     private ResourceBundle rb;
+ 
+ 
+@@ -61,25 +60,33 @@ public class LlistaSolicitudsPECXLSX {
+         XSSFRow filaCapçalera = hoja.createRow(numFila++);
+         int numColumna = 0;
+ 
+-        this.escriuCella(filaCapçalera, numColumna++, rb.getString("eti.codi"), estilCapcalera);
+-        this.escriuCella(filaCapçalera, numColumna++, rb.getString("eti.llinatgesNom"), estilCapcalera);
+-        this.escriuCella(filaCapçalera, numColumna++, rb.getString("eti.centreEti"), estilCapcalera);
+-        this.escriuCella(filaCapçalera, numColumna++, rb.getString("eti.modalitat"), estilCapcalera);
+-        this.escriuCella(filaCapçalera, numColumna++, rb.getString("eti.dataCreacio"), estilCapcalera);
+-        this.escriuCella(filaCapçalera, numColumna++, rb.getString("eti.estat"), estilCapcalera);
++        this.escriuCellaStr(filaCapçalera, numColumna++, rb.getString("eti.codi"), estilCapcalera);
++        this.escriuCellaStr(filaCapçalera, numColumna++, rb.getString("eti.llinatgesNom"), estilCapcalera);
++        this.escriuCellaStr(filaCapçalera, numColumna++, rb.getString("eti.centreEti"), estilCapcalera);
++        this.escriuCellaStr(filaCapçalera, numColumna++, rb.getString("eti.modalitat"), estilCapcalera);
++        this.escriuCellaStr(filaCapçalera, numColumna++, rb.getString("eti.codiEstat"), estilCapcalera);
++        this.escriuCellaStr(filaCapçalera, numColumna++, rb.getString("eti.estat"), estilCapcalera);
++        this.escriuCellaStr(filaCapçalera, numColumna++, rb.getString("eti.dataCreacio"), estilCapcalera);
++        this.escriuCellaStr(filaCapçalera, numColumna++, rb.getString("eti.veDe"), estilCapcalera);
++        this.escriuCellaStr(filaCapçalera, numColumna++, rb.getString("eti.continuaA"), estilCapcalera);
++        this.escriuCellaStr(filaCapçalera, numColumna++, rb.getString("eti.dataBaixa"), estilCapcalera);
+ 
+         for (SolicitudPEC solicitudPEC : llistaSolicituds) {
+             XSSFRow filaDades = hoja.createRow(numFila++);
+             numColumna = 0;
+-            this.escriuCella(filaDades, numColumna++, solicitudPEC.getCodi(), estilNormal);
+-            this.escriuCella(filaDades, numColumna++, solicitudPEC.getMatricula().getPersona().getNom().getLlinatgesINom(), estilNormal);
+-            this.escriuCella(filaDades, numColumna++, solicitudPEC.getMatricula().getCentre().getNomComplet(), estilNormal);
+-            this.escriuCella(filaDades, numColumna++, solicitudPEC.getModalitat().name(), estilNormal);
+-            this.escriuCella(filaDades, numColumna++, sdf.format(solicitudPEC.getDadesAuditoria().getDataInsercio()), estilNormal);
+-            this.escriuCella(filaDades, numColumna++, solicitudPEC.getEstat().getTraduccions().get(Idioma.LOCALE_APLICACIO.toString()).getNom(), estilNormal);
++            this.escriuCellaStr(filaDades, numColumna++, solicitudPEC.getCodi(), estilNormal);
++            this.escriuCellaStr(filaDades, numColumna++, solicitudPEC.getMatricula().getPersona().getNom().getLlinatgesINom(), estilNormal);
++            this.escriuCellaStr(filaDades, numColumna++, solicitudPEC.getMatricula().getCentre().getNomComplet(), estilNormal);
++            this.escriuCellaStr(filaDades, numColumna++, solicitudPEC.getModalitat().name(), estilNormal);
++            this.escriuCellaNum(filaDades, numColumna++, solicitudPEC.getEstat().getCodi(), estilNormal);
++            this.escriuCellaStr(filaDades, numColumna++, solicitudPEC.getEstat().getTraduccions().get(Idioma.LOCALE_APLICACIO.toString()).getNom(), estilNormal);
++            this.escriuCellaStr(filaDades, numColumna++, sdf.format(solicitudPEC.getDadesAuditoria().getDataInsercio()), estilNormal);
++            this.escriuCellaStr(filaDades, numColumna++, solicitudPEC.getSolicitudOriginal() != null ? solicitudPEC.getSolicitudOriginal().getCodi() : "", estilNormal);
++            this.escriuCellaStr(filaDades, numColumna++, !solicitudPEC.getSolicitudsContinuitat().isEmpty() ? solicitudPEC.getSolicitudsContinuitat().iterator().next().getCodi() : "", estilNormal);
++            this.escriuCellaStr(filaDades, numColumna++, solicitudPEC.getDataBaixaPrograma()!=null?sdfDMY.format(solicitudPEC.getDataBaixaPrograma()):"", estilNormal);
+         }
+ 
+-        while (numColumna>0){
++        while (numColumna>=0){
+             hoja.autoSizeColumn(numColumna);
+             numColumna--;
+         }
+@@ -87,11 +94,16 @@ public class LlistaSolicitudsPECXLSX {
+         return libro;
+     }
+ 
+-    private void escriuCella(XSSFRow fila, int col, String contingut, XSSFCellStyle estil) {
++    private void escriuCellaStr(XSSFRow fila, int col, String contingut, XSSFCellStyle estil) {
+         XSSFCell celda = fila.createCell(col);
+         celda.setCellStyle(estil);
+-        XSSFRichTextString texto = new XSSFRichTextString(contingut);
+-        celda.setCellValue(texto);
++        celda.setCellValue(contingut);
++    }
++
++    private void escriuCellaNum(XSSFRow fila, int col, int contingut, XSSFCellStyle estil) {
++        XSSFCell celda = fila.createCell(col);
++        celda.setCellStyle(estil);
++        celda.setCellValue(contingut);
+     }
+ 
+ }
+diff --git a/modules/www/xestib.war/WEB-INF/views/activitats/gestioActivitats_BTS.jsp b/modules/www/xestib.war/WEB-INF/views/activitats/gestioActivitats_BTS.jsp
+index ec264c54df7ff9cd69e500c96ad02d7dd8e57d6e..3c76afcf0c9e3ecb9d64d8b4029c4aa098edf484 100644
+--- a/modules/www/xestib.war/WEB-INF/views/activitats/gestioActivitats_BTS.jsp
++++ b/modules/www/xestib.war/WEB-INF/views/activitats/gestioActivitats_BTS.jsp
+@@ -401,16 +401,16 @@
+     <div id="modalEventCalendar" class="modal fade in" data-eventSources="" data-idEvent="">
+         <div class="modal-dialog">
+             <div class="modal-content">
+-                <div id="idModalEventCalendarHeader" class="modal-header">
++                <div id="idModalEventCalendarHeader" class="modal-header {{controller.getClassModalEvent()}}">
+                     <button type="button" class="btn btn-default pull-right" ng-click="controller.tancaModalEvent()"><span aria-hidden="true">×</span></button>
+-                    <h4 id="modalEvent_header" class="modal-title negreta"></h4>
++                    <h4 id="modalEvent_header" class="modal-title negreta" ng-bind-html="controller.getEventHeader() | to_trusted"></h4>
+                 </div>
+                 <div class="modal-body no-padding">
+                     <div class="box box-warning no-margin">
+                         <div class="box-body">
+                             <fieldset>
+-                                <legend id="modalEvent_title"></legend>
+-                                <div id="modalEvent_info"></div>
++                                <legend id="modalEvent_title" ng-bind-html="controller.retornaStrTitle() | to_trusted"></legend>
++                                <div id="modalEvent_info" ng-bind-html="controller.retornaStrInfo() | to_trusted"></div>
+                                 <div id="infoActivitat" ng-show="controller.event.source.id=='eventsGrup_agenda' || controller.event.source.id=='eventsActivitatsCentre'">
+                                     <a><i class="fas fa-exclamation-triangle"></i></a>&nbsp;
+                                     <strong class="nota"><fmt:message bundle='${etiquetes}' key='infoActivitat' /></strong>
+@@ -428,7 +428,7 @@
+                             <div class="row">
+                                 <div class="col-sm-12 text-right">
+                                     <button ng-show="controller.mostraVisibleFamilies()" type="button" id="btnFesVisible" class="btn btn-primary" >Fes visible a famílies</button>
+-                                    <button type="button" id="btnEsborraEventCalendar" class="btn btn-danger hidden" ><fmt:message bundle='${etiquetes}' key='esborra' /></button>
++                                    <button type="button" id="btnEsborraEventCalendar" class="btn btn-danger hidden" ng-show="controller.mostraBotoEsborra()" >Esborra</button>
+                                 </div>
+                             </div>
+                         </div>
+@@ -471,7 +471,7 @@
+                             <div class="form-group col-xs-12">
+                                 <label >Àmbit de l'activitat:</label>
+                                 <input style="margin: 0px 5px 0px 5px" type="radio" ng-model="controller.activitat.ambit" value="genericaMateria" id="materia" ng-show="controller.getPrimeraSubmateriaCurs()" ng-click="controller.comprovaMateriaSeleccionada()"><label for="materia">Matèria</label>
+-                                <span ng-if="controller.esTutorGrup() || controller.esGestorActivitats">
++                                <span ng-if="controller.permetGrup()">
+                                     <input style="margin: 0px 5px 0px 5px" type="radio" ng-model="controller.activitat.ambit" value="genericaGrup" id="ambitGrup"><label for="ambitGrup">Grup</label>
+                                 </span>
+                                 <c:if test="${esGestorActivitats}">
+diff --git a/modules/www/xestib.war/WEB-INF/views/control/preparaEmail.jsp b/modules/www/xestib.war/WEB-INF/views/control/preparaEmail.jsp
+index 8cbaa5498f98473621d9953bed623662401e8e9f..363213ca79c8a409e6d54865050f99c3d431afd1 100644
+--- a/modules/www/xestib.war/WEB-INF/views/control/preparaEmail.jsp
++++ b/modules/www/xestib.war/WEB-INF/views/control/preparaEmail.jsp
+@@ -6,10 +6,20 @@
+       <title>Comporva servidor email</title>
+   </head>
+   <body>
++     <h3>text</h3>
+      <form action="email" method="get" >
+          Enviar a : <input type="text" name="to" />
+          <br />
+          <input type="submit" name="Envia" />
+      </form>
++
++     <h3>html</h3>
++     <form action="emailHtml" method="get" >
++         Enviar a : <input type="text" name="to" /><br />
++         cos (html) : <textarea name="html" ></textarea> <br />
++         document (opcional) : <input type="text" name="codiDocument" /><br />
++         <br />
++         <input type="submit" name="Envia" />
++     </form>
+   </body>
+ </html>
+\ No newline at end of file
+diff --git a/modules/www/xestib.war/WEB-INF/views/quadernProfessor/gestioRubriques_BTS.jsp b/modules/www/xestib.war/WEB-INF/views/quadernProfessor/gestioRubriques_BTS.jsp
+index f47e5a6268af3e4d5c2755bcce9285fb4bb9d633..8c4cf99abef90f73106423f5436cc1f5a4d08ec4 100644
+--- a/modules/www/xestib.war/WEB-INF/views/quadernProfessor/gestioRubriques_BTS.jsp
++++ b/modules/www/xestib.war/WEB-INF/views/quadernProfessor/gestioRubriques_BTS.jsp
+@@ -97,8 +97,7 @@
+                             <br>
+                        </span>
+                        Els pesos dels nivells serveixen per donar més valor o menys a un concepte, i es calculen de forma general. Anau amb compte a mesclar pesos i ponderacions, perquè el càlcul de la nota pot ser diferent a l'esperat.
+-                       La fórmula del càlcul de la nota és el següent:  <img src="/xestib/img/formulaRubriques.jpg">.
+-                        Si posau el pes del nivell mínim de cada concepte a 0, la fórmula se simplifica.
++                       Si posau el pes del nivell mínim de cada concepte a 0, la fórmula se simplifica.
+                         <a href="http://suportgestib.caib.es/2020/01/07/calcul-de-la-nota-duna-rubrica/" target="_new">Explicació del càlcul de la nota</a>
+                         
+                     </div>
+diff --git a/modules/www/xestib.war/WEB-INF/views/quadernProfessor/quadernProfessor_BTS.jsp b/modules/www/xestib.war/WEB-INF/views/quadernProfessor/quadernProfessor_BTS.jsp
+index d70a8322a1fbae2497d085fb49b3f4f61861263b..88765e12639e33338427aa5fa8d28d38b495f0f3 100644
+--- a/modules/www/xestib.war/WEB-INF/views/quadernProfessor/quadernProfessor_BTS.jsp
++++ b/modules/www/xestib.war/WEB-INF/views/quadernProfessor/quadernProfessor_BTS.jsp
+@@ -1231,6 +1231,56 @@
+     </div>
+     <!-- END MODAL RUBRICA -->
+ 
++    <div id="modalDuplicaQuadern" class="modal fade in">
++        <div class="modal-dialog" style="width: 60%;">
++            <div class="modal-content">
++                <div class="box box-warning box-bordered">
++                    <div class="box-header">
++                        <button type="button" class="btn btn-default pull-right" ng-click="controller.tancaModalDuplicaQuadern()"><span aria-hidden="true">×</span></button>
++                        <h3 class="box-title">Duplicació de quadern</h3>
++                    </div>
++                    <div class="box-body">
++                        <div class="row">
++                            <div class="col-sm-12">
++                                <input type="checkbox" id="inclouAlumnesNotesQuadern" ng-model="controller.inclouAlumnesNotesQuadern"><label class="control-label" for="inclouAlumnesNotesQuadern">Inclou també els alumnes amb les seves notes</label>
++                            </div>
++                        </div>
++                    </div>
++                    <div class="box-footer">
++                        <div class="pull-right">
++                            <input type="button" value="Duplica quadern" class="btn btn-success" ng-click="controller.doDuplicaQuadern()()"/>
++                        </div>
++                    </div>
++                </div>
++            </div>
++        </div>
++    </div>
++
++    <div id="modalDuplicaFull" class="modal fade in">
++        <div class="modal-dialog" style="width: 60%;">
++            <div class="modal-content">
++                <div class="box box-warning box-bordered">
++                    <div class="box-header">
++                        <button type="button" class="btn btn-default pull-right" ng-click="controller.tancaModalDuplicaFull()"><span aria-hidden="true">×</span></button>
++                        <h3 class="box-title">Duplicació de full</h3>
++                    </div>
++                    <div class="box-body">
++                        <div class="row">
++                            <div class="col-sm-12">
++                                <input type="checkbox" id="inclouAlumnesNotesFull" ng-model="controller.inclouAlumnesNotesFull"><label class="control-label" for="inclouAlumnesNotesFull">Inclou també els alumnes amb les seves notes</label>
++                            </div>
++                        </div>
++                    </div>
++                    <div class="box-footer">
++                        <div class="pull-right">
++                            <input type="button" value="Duplica full" class="btn btn-success" ng-click="controller.doDuplicaFull()()"/>
++                        </div>
++                    </div>
++                </div>
++            </div>
++        </div>
++    </div>
++
+     <!-- MODAL IMPRESSIÓ INFORME -->
+     <div id="modalInforme" class="modal fade in">
+         <div class="modal-dialog" style="width: 60%;">
+diff --git a/modules/www/xestib.war/WEB-INF/views/xestib/traduccio.jsp b/modules/www/xestib.war/WEB-INF/views/xestib/traduccio.jsp
+index a05090df965b6d3ba0036d9d5bdee1af8b0f6122..473472beece46e2e612f97a62952b829066ac0c8 100644
+--- a/modules/www/xestib.war/WEB-INF/views/xestib/traduccio.jsp
++++ b/modules/www/xestib.war/WEB-INF/views/xestib/traduccio.jsp
+@@ -1,6 +1,6 @@
+ <%@ page import="java.util.Enumeration"%><%@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c" %>
+ <%@ taglib prefix="fmt" uri="http://java.sun.com/jsp/jstl/fmt"  %>
+-<%@ page contentType="application/javascript; charset=UTF-8" %>
++<%@ page contentType="application/javascript; charset=UTF-8" session="false" %>
+ <%--@elvariable id="locale" type="java.lang.String"--%>
+ <c:choose>
+ <c:when test="${!empty param.idioma}"><fmt:setLocale value="${param.idioma}" scope="page" /></c:when>
+diff --git a/modules/www/xestib.war/js/activitats/gestioActivitats_BTS.js b/modules/www/xestib.war/js/activitats/gestioActivitats_BTS.js
+index 42638161859a24bfc3cea57aed8adc16aadbd7bf..72b23f0179284892e10bc3be024ed1b395dd8c8d 100644
+--- a/modules/www/xestib.war/js/activitats/gestioActivitats_BTS.js
++++ b/modules/www/xestib.war/js/activitats/gestioActivitats_BTS.js
+@@ -1,4 +1,4 @@
+-var appGestib = angular.module("gestibAppCont", ['exceptionOverride']);
++var appGestib = angular.module("gestibAppCont", ['exceptionOverride','xestibUtils']);
+ 
+ var controladorActivitats = appGestib.controller("ActivitatsController",
+     function ($http, $scope, $window, $filter) {
+@@ -101,7 +101,7 @@ var controladorActivitats = appGestib.controller("ActivitatsController",
+                 navLinks: true,
+                 isRTL: false,
+                 firstDay: 1,
+-                editable: true,
++                editable: false,
+                 eventDurationEditable: true,
+                 selectable:true,
+                 eventAfterAllRender: function(){
+@@ -221,9 +221,9 @@ var controladorActivitats = appGestib.controller("ActivitatsController",
+             obj.obriModalActivitat();
+         }
+ 
+-        this.mostraModalEvent = function (event, jsEvent, view) {
+-            this.event = event;
+-            obj.codiEvent=event.id;
++        this.getEventHeader = function () {
++            if (!this.event ) return;
++            var event = this.event;
+             var strHeader="";
+             var strInfo="";
+             if ( !event.allDay || event.allDay==="false")  {
+@@ -232,91 +232,109 @@ var controladorActivitats = appGestib.controller("ActivitatsController",
+             } else {
+                 strHeader+=moment(event.start).format("DD/MM/YYYY")
+             }
+-            $("#idModalEventCalendarHeader").removeClass();
+-            $("#idModalEventCalendarHeader").addClass("modal-header");
++            return strHeader;
++        }
+ 
++        this.mostraBotoEsborra = function () {
++            if (!this.event ) return;
++            var event = this.event;
++            if(event.font.id=="eventsGrup_agenda") {
++                if (event.codiSubmateria){
++                    if (obj.isSubmateriaProfessor(event.codiSubmateria)) {
++                        return true;
++                    }
++                }else{
++                    if (this.permetGrup()){
++                        return true;
++                    }
++                }
++            }
++            if(event.font.id=="eventsActivitatsCentre"){
++                return this.esGestorActivitats;
++            }
++
++            return false;
++        }
++
++        this.getClassModalEvent = function () {
++            if (!this.event ) return;
++            var event = this.event;
+             if(event.font.id=="eventsGrup_agenda") {
+                 // activitats creades pel tutor o per materia
+-                $("#idModalEventCalendarHeader").addClass("tipusActivitat_"+event.codiTipusEvent);
+-                //id:'eventsGrup_agenda' i   id:'eventsAlumne',
++                return "tipusActivitat_"+event.codiTipusEvent;
++            } else if(event.font.id=="eventsActivitatsCentre"){
++                return "tipusActivitat_"+event.codiTipusEvent;
++            } else if(event.font.id=="sortidesEscolars"){
++                if (event.tipusSortidaEscolar=="SE"){
++                    return "sortidaEscolar";
++                } else if (event.tipusSortidaEscolar=="AC"){
++                    return "activitatComplementaria";
++                }
++            }else {
++                return "header_"+modificaEstilEvent(event);
++            }
++        }
++
++        this.mostraModalEvent = function (event, jsEvent, view) {
++            this.event = event;
++            obj.codiEvent=event.id;
++            $scope.$apply();
++            $("#modalEventCalendar").jqmShow();
++        }
++
++        this.retornaStrTitle = function () {
++            if (!this.event ) return;
++            var event = this.event;
++            if(event.font.id=="eventsGrup_agenda") {
++                if (event.codiSubmateria) {
++                    return "Activitat de matèria.";
++                }
++                else  {
++                    return "Activitat de grup ";
++                }
++                $ ( "#modalEvent_title" ).show();
++            } else if(event.font.id=="eventsActivitatsCentre"){
++                return _( "activitatCentre" );
++            } else if(event.font.id=="sortidesEscolars"){
++                if (event.tipusSortidaEscolar=="SE"){
++                    return  _( "sortidaEscolar" );
++                } else if (event.tipusSortidaEscolar=="AC"){
++                    return _( "activitatComplementaria" );
++                }
++            }
++            return "";
++        }
++
++        this.mostraVisibleFamilies = function () {
++            if (!this.event ) return;
++            var event = this.event;
++            if(event.font.id=="eventsGrup_agenda") {
+                 if (event.codiSubmateria) {
+                     $ ( "#modalEvent_title" ).text( _ ( "activitatPerMateria" ) );
+-                    strInfo += obj.retornaStrInfo(event, view);
+-                    if (obj.comprovaSiImparteixSubmateria( event.codiSubmateria )) {
+-                        $ ( "#btnEsborraEventCalendar" ).removeClass( 'hidden' );
+-                        obj.mostraVisibleFamilies(event, true);
+-                    }
+-                    else {
+-                        $ ( "#btnEsborraEventCalendar" ).addClass( 'hidden' );
+-                        obj.mostraVisibleFamilies(event, false);
++                    if (obj.isSubmateriaProfessor( event.codiSubmateria )) {
++                        return true;
+                     }
+                 }
+                 else  {
+-                    $ ( "#modalEvent_title" ).text("Activitat grup");
+-                    strInfo += obj.retornaStrInfo(event, view);
+-                    if (obj.esTutorGrupSeleccionat) {
+-                        $ ( "#btnEsborraEventCalendar" ).removeClass( 'hidden' );
+-                        obj.mostraVisibleFamilies(event, true);
+-                    }
+-                    else {
+-                        $ ( "#btnEsborraEventCalendar" ).addClass( 'hidden' );
+-                        obj.mostraVisibleFamilies(event, false);
++                    if (obj.permetGrup()) {
++                        return true;
+                     }
+                 }
+-                $ ( "#modalEvent_title" ).show();
+-                $ ( "#modalEvent_header" ).html( strHeader );
+             } else if(event.font.id=="eventsActivitatsCentre"){
+-                $("#idModalEventCalendarHeader").addClass("icon").addClass("tipusActivitat_"+event.codiTipusEvent);
+-                $ ( "#modalEvent_title" ).text( _ ( "activitatCentre" ) );
+-                // activitas que afecten al centre
+                 if (event.codiTipusEvent == '12' || event.codiTipusEvent == '13' || event.codiTipusEvent == '14' || event.codiTipusEvent == '15' || event.codiTipusEvent == '16') {
+-                    $ ( "#modalEvent_title" ).text( _ ( "activitatPerCentre" ) );
+-                    strInfo += obj.retornaStrInfo(event, view);
+                     if (obj.esGestorActivitats) {
+-                        $ ( "#btnEsborraEventCalendar" ).removeClass( 'hidden' );
+-                        obj.mostraVisibleFamilies(event, true);
+-                    }
+-                    else {
+-                        $ ( "#btnEsborraEventCalendar" ).addClass( 'hidden' );
+-                        obj.mostraVisibleFamilies(event, false);
++                        return true;
+                     }
+                 }
+-                $ ( "#modalEvent_title" ).show();
+-                $ ( "#modalEvent_header" ).html( strHeader );
+-            } else if(event.font.id=="sortidesEscolars"){
+-                if (event.tipusSortidaEscolar=="SE"){
+-                    $("#idModalEventCalendarHeader").removeClass("activitatComplementaria").addClass("sortidaEscolar");
+-                    $( "#modalEvent_title" ).text( _ ( "sortidaEscolar" ) );
+-                } else if (event.tipusSortidaEscolar=="AC"){
+-                    $("#idModalEventCalendarHeader").removeClass("sortidaEscolar").addClass("activitatComplementaria");
+-                    $( "#modalEvent_title" ).text( _ ( "activitatComplementaria" ) );
+-                }
+-                strInfo += obj.retornaStrInfo(event, view);
+-                $("#btnEsborraEventCalendar").addClass('hidden');
+-                $("#modalEvent_header").html(strHeader);
+-            }else {
+-                $("#idModalEventCalendarHeader").addClass( "header_"+modificaEstilEvent(event));
+-                strInfo="<p>"+event.title+"</p>";
+-                $("#btnEsborraEventCalendar").addClass('hidden');
+-                $("#modalEvent_header").html(strHeader);
+-                $("#modalEvent_title").hide();
+             }
+-
+-            $("#modalEvent_info").html(strInfo);
+-
+-            $("#modalEventCalendar").jqmShow();
++            return false
+         }
+ 
+-        this.retornaStrInfo = function(event, view){
++        this.retornaStrInfo = function(){
++            if (!this.event ) return;
++            var event = this.event;
+             var obj=this;
+-            var destinataris="";
+-            if (view==undefined){
+-                // s'ha fet clic sobre una fila del datatable
+-                destinataris = (event.destinataris ? event.destinataris : "");
+-            } else {
+-                // s'ha fet clic sobre un event del fullCalendar
+-                destinataris = obj.ompleCampDestinataris( event );
+-            }
++            var destinataris=obj.ompleCampDestinataris( event );
+             var strInfo = "";
+             strInfo += "<div class='row'><div class='col-sm-12'><label class='control-label'>" + event.title + "</div></div>";
+             strInfo += "<div class='row'><div class='col-sm-12'><label class='control-label'>Destinataris:&nbsp;</label><label class='negreta'>" + destinataris + "</label></div></div>";
+@@ -335,6 +353,9 @@ var controladorActivitats = appGestib.controller("ActivitatsController",
+                 strInfo += "<div class='row'><div class='col-sm-12'><label class='control-label'>" + _("usuAltaSortida") + ":&nbsp;</label><label class='negreta'>" + (event.nomProfessor ? event.nomProfessor : "") + "</label></div></div>";
+             }
+             strInfo += "<div class='row'><div class='col-sm-12'><label class='control-label'>" + _ ( "visibleFamilies" ) + ":&nbsp;</label><label class='negreta'>" + (event.visibleFamilies ?"Si" : "No") + "</label></div></div>";
++            if (event.idGrupEvent) {
++                strInfo += "<div class='row'><div class='col-sm-12'><label class='control-label'>(Forma part d'un grup d'events)</label></div></div>";
++            }
+ 
+             return strInfo;
+         }
+@@ -361,10 +382,6 @@ var controladorActivitats = appGestib.controller("ActivitatsController",
+             return resultat
+         };
+ 
+-        this.mostraVisibleFamilies = function(){
+-            return false;
+-        }
+-
+         this.imprimeixCalendari = function () {
+             var curs = $("#curs").val();
+             var txtCurs= $("#curs option[value='" + curs + "']" ).html();
+@@ -454,6 +471,14 @@ var controladorActivitats = appGestib.controller("ActivitatsController",
+                 codiSubmateria:null,
+                 ambit:"genericaGrup"
+             };
++            if (!this.permetGrup()){
++                this.activitat.ambit = "genericaMateria";
++                this.comprovaMateriaSeleccionada();
++            }
++        }
++
++        this.permetGrup = function(){
++            return this.esTutorGrup() || this.esGestorActivitats;
+         }
+ 
+         this.desaActivitat = function(){
+diff --git a/modules/www/xestib.war/js/quadernProfessor/quadernProfessor.js b/modules/www/xestib.war/js/quadernProfessor/quadernProfessor.js
+index 87f04d8b93b8343d4b596f15b2313519e65f81ba..f827d73326651b0b339ba17971529a3ead7dcc0b 100644
+--- a/modules/www/xestib.war/js/quadernProfessor/quadernProfessor.js
++++ b/modules/www/xestib.war/js/quadernProfessor/quadernProfessor.js
+@@ -58,6 +58,8 @@ var controladorQuadernProfessor = appQuadernProfessorat.controller("QuadernProfe
+             obj.coavaluadors = [];
+             obj.alumneAvaluadorCoavaluacio = null;
+             obj.alumneAvaluatCoavaluacio = null;
++            obj.inclouAlumnesNotesQuadern = false;
++            obj.inclouAlumnesNotesFull = false;
+ 
+             obj.dadesFormCerca = {
+                 selCurs : "",
+@@ -159,6 +161,8 @@ var controladorQuadernProfessor = appQuadernProfessorat.controller("QuadernProfe
+             $("#modalAlumnatMatriculat").jqm({modal:true});
+             $("#modalVisibilitatColumnes").jqm({modal:true});
+             $("#modalTipusValoracions").jqm({modal:true});
++            $("#modalDuplicaQuadern").jqm({modal:true});
++            $("#modalDuplicaFull").jqm({modal:true});
+ 
+             obj.cursAcademic = parseFloat($window.ANY_ACA);
+             obj.idUsuari = $window.IDUSUARI;
+@@ -1480,7 +1484,7 @@ var controladorQuadernProfessor = appQuadernProfessorat.controller("QuadernProfe
+                     || alumneMatriculat.estatMateriaMatriculada == "CO"
+                     || alumneMatriculat.estatMateriaMatriculada == "RE"
+                     || (obj.fullExistent && obj.fullExistent.codiGrup && alumneMatriculat.grup!=obj.fullExistent.codiGrup)
+-                    || (obj.quadern.codiMateria && !alumneMatriculat.materiaMatriculada)
++                    || (obj.quadern && obj.quadern.codiMateria && !alumneMatriculat.materiaMatriculada)
+                     || (obj.fullExistent && obj.fullExistent.submateria && obj.fullExistent.submateria.codi && alumneMatriculat.submateria != obj.fullExistent.submateria.codi)
+                 );
+             }
+@@ -1994,24 +1998,7 @@ var controladorQuadernProfessor = appQuadernProfessorat.controller("QuadernProfe
+                 obj.permisAgrupamentColumna = false;
+                 obj.agrupamentColumna = null;
+             };
+-            obj.duplicaFull = function() {
+-                var codiFull = obj.fullExistent.codiFull;
+-                confirmGestib("Vols que el full duplicat tengui els mateixos alumnes i notes?", function(copiarAlumnesFull){
+-                    return $http({
+-                        method: "POST",
+-                        url: "/xestib/quadernProfessor/duplicaFull.do",
+-                        headers: {'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8;'},
+-                        data: $.param({codi : codiFull, copiarAlumnesFull: copiarAlumnesFull})
+-                    }).then(function success() {
+-                        successGestib("Full duplicat correctament. Ja el pots triar al seleccionable de fulls.");
+-                        obj.loadingModal.hide();
+-                        obj.carregaQuadern(codiFull);
+-                    }, function errorCallBack() {
+-                        obj.loadingModal.hide();
+-                        errorGestib("No s'ha pogut duplicar el full.");
+-                    });
+-                }, "Sí", "No");
+-            };
++
+             obj.desaValorsFull = function() {
+                 var parametres = "full=" + obj.currentFull;
+                 if (obj.notesModificades.length == 0){
+@@ -3528,25 +3515,61 @@ var controladorQuadernProfessor = appQuadernProfessorat.controller("QuadernProfe
+                 });
+             }
+ 
++            obj.tancaModalDuplicaFull = function(){
++                $('#modalDuplicaFull').jqmHide();
++            }
++
++            obj.duplicaFull = function(){
++                obj.inclouAlumnesNotesFull = false;
++                $("#modalDuplicaFull").jqmShow();
++            }
++
++            obj.doDuplicaFull = function() {
++                var codiFull = obj.fullExistent.codiFull;
++                obj.loadingModal.show();
++                return $http({
++                    method: "POST",
++                    url: "/xestib/quadernProfessor/duplicaFull.do",
++                    headers: {'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8;'},
++                    data: $.param({codi : codiFull, copiarAlumnesFull: obj.inclouAlumnesNotesFull})
++                }).then(function success() {
++                    successGestib("Full duplicat correctament. Ja el pots triar al seleccionable de fulls.");
++                    obj.loadingModal.hide();
++                    obj.carregaQuadern(codiFull);
++                    obj.tancaModalDuplicaFull();
++                }, function errorCallBack() {
++                    obj.loadingModal.hide();
++                    errorGestib("No s'ha pogut duplicar el full.");
++                });
++            };
++
++            obj.tancaModalDuplicaQuadern = function(){
++                $('#modalDuplicaQuadern').jqmHide();
++            }
++
+             obj.duplicaQuadern = function(){
++                obj.inclouAlumnesNotesQuadern = false;
++                $("#modalDuplicaQuadern").jqmShow();
++            }
++
++            obj.doDuplicaQuadern = function(){
+                 var quadern = obj.quadern.codi;
+-                confirmGestib("Vols que el quadern duplicat tengui els mateixos alumnes?", function(copiarAlumnesFull){
+-                    obj.loadingModal.show();
+-                    return $http({
+-                        method: "POST",
+-                        url: "/xestib/quadernProfessor/duplicaQuadern.do",
+-                        headers: {'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8;'},
+-                        data: $.param({codi : quadern, copiarAlumnesFull: copiarAlumnesFull})
+-                    }).then(function success() {
+-                        successGestib("Quadern duplicat correctament. Ja el pots triar al seleccionable de quaderns.");
+-                        obj.loadingModal.hide();
+-                        obj.cercaQuaderns();
+-                    }, function errorCallBack() {
+-                        obj.loadingModal.hide();
+-                        errorGestib("No s'ha pogut duplicar el quadern.");
+-                        obj.cercaQuaderns();
+-                    });
+-                }, "Sí", "No");
++                obj.loadingModal.show();
++                return $http({
++                    method: "POST",
++                    url: "/xestib/quadernProfessor/duplicaQuadern.do",
++                    headers: {'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8;'},
++                    data: $.param({codi : quadern, copiarAlumnesFull: obj.inclouAlumnesNotesQuadern})
++                }).then(function success() {
++                    successGestib("Quadern duplicat correctament. Ja el pots triar al seleccionable de quaderns.");
++                    obj.loadingModal.hide();
++                    obj.cercaQuaderns();
++                    obj.tancaModalDuplicaQuadern();
++                }, function errorCallBack() {
++                    obj.loadingModal.hide();
++                    errorGestib("No s'ha pogut duplicar el quadern.");
++                    obj.cercaQuaderns();
++                });
+             }
+ 
+             obj.obriModalEsborrats = function(){
